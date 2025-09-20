@@ -244,3 +244,5 @@ http-client.private.env.json
 
 ## Custom
 .idea/
+build/
+.vscode/
