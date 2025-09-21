@@ -1,33 +1,37 @@
-// Example testing sketch for various DHT humidity/temperature sensors written by ladyada
-// REQUIRES the following Arduino libraries:
-// - DHT Sensor Library: https://github.com/adafruit/DHT-sensor-library
-// - Adafruit Unified Sensor Lib: https://github.com/adafruit/Adafruit_Sensor
+// This sketch built ontop of an simple example in the public domain from the DHT Sensor Library by ladyada.
 
 #include "DHT.h"
 #define LED_PIN 2
-#define DHTPIN 4     // Digital pin connected to the DHT sensor
+#define DHTPIN 4 // Digital pin connected to the DHT sensor
 
 #define DHTTYPE DHT11   // DHT 11
 
 // Initialize DHT sensor.
 DHT dht(DHTPIN, DHTTYPE);
 bool readData = false;
-unsigned long previousData = 0;
+unsigned long lastSensorReadTime = 0;
+unsigned long lastBlink = 0;
 
-//Offsets
+// Offsets
+// TODO: Add default offsets for our sensor? Or make it a command?
 float offsetTemp = 0;
 float offsetHumid = 0;
 
-//Thresholds
+// Thresholds
 float lowTempThreshC = 15;
 float highTempThreshC = 30;
 float lowHumidThresh = 30;
 float highHumidThresh = 70;
 
 void setup() {
+  // Start serial console
   Serial.begin(115200);
-  Serial.println(F("DHTxx test!"));
+  Serial.println("Hello serial console!");
+
+  // Configure the LED pin
   pinMode(LED_PIN, OUTPUT);
+
+  // Start communicating with the tempature sensor
   dht.begin();
 }
 
@@ -41,9 +45,9 @@ void loop() {
     case 'T':  readData = false; digitalWrite(LED_PIN, LOW); changeThresholds();      break;  // T for Threshold
     default: break;  // ignore everything else
   }
-  
 
-  if(readData){
+  if(readData && millis() - lastSensorReadTime > 1000){
+
     // Reading temperature or humidity takes about 250 milliseconds!
     // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
     float h = dht.readHumidity();
@@ -57,65 +61,77 @@ void loop() {
     float hic = dht.computeHeatIndex(t, h, false);*/
 
 
-    if(millis() - previousData > 1000){
-      // Check if any reads failed and exit early (to try again).
-      if (isnan(h) || isnan(t) || isnan(f)) {
-        Serial.println(F("Failed to read from DHT sensor!"));
-        return;
-      }
+    // Check if any reads failed and exit early (to try again).
+    if (isnan(h) || isnan(t) || isnan(f)) {
+      Serial.println(F("Failed to read from DHT sensor!"));
+      return;
+    }
 
-      previousData = millis();
-      Serial.print(F("Humidity: "));
-      Serial.print(h - offsetHumid);
-      Serial.print(F("%  Temperature: "));
-      Serial.print(t - offsetTemp);
-      Serial.println(F("°C "));
-      /*Serial.print((f - offsetTemp));
-      Serial.println(F("°F "));*/
+    lastSensorReadTime = millis();
 
-      //If the temperature is below 15°C or humidity is below 30%, the LED should blink every second.
-      if((t - offsetTemp) < lowTempThreshC || (h - offsetHumid) < lowHumidThresh){
-        digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-      //If the temperature exceeds 30°C or humidity exceeds 70%, the LED should turn on.
-      } else if((t - offsetTemp) > highTempThreshC || (h - offsetHumid) > highHumidThresh){
-        digitalWrite(LED_PIN, HIGH);
-      //For temperature between 15°C and 30°C and humidity between 30% and 70%, the LED should remain off.
-      } else {
-        digitalWrite(LED_PIN, LOW);
-      }
+    Serial.print(F("Humidity: "));
+    Serial.print(h - offsetHumid);
+    Serial.print(F("%  Temperature: "));
+    Serial.print(t - offsetTemp);
+    Serial.println(F("°C "));
+    /*Serial.print((f - offsetTemp));
+    Serial.println(F("°F "));*/
+
+    // By default...
+    // If the temperature is below 15°C or humidity is below 30%, the LED should blink every second.
+    if((t - offsetTemp) < lowTempThreshC || (h - offsetHumid) < lowHumidThresh){
+      digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+    // If the temperature exceeds 30°C or humidity exceeds 70%, the LED should turn on.
+    } else if((t - offsetTemp) > highTempThreshC || (h - offsetHumid) > highHumidThresh){
+      digitalWrite(LED_PIN, HIGH);
+    // For temperature between 15°C and 30°C and humidity between 30% and 70%, the LED should remain off.
+    } else {
+      digitalWrite(LED_PIN, LOW);
     }
   }
 }
 
 void calibrateData(){
   //Reset previous offset
+  float currTemp;
+  float currHumid;
+
+  try
+  {
+    //Clear the message line of anything that might be leftover from previous inputs
+    while (Serial.available() > 0) {
+      Serial.read();
+    }
+
+    //Get accurate data for current temp
+    Serial.println("Please enter the current temperature in Celsius. This will be used to calculate the proper offset for the termperature sensor. ");
+    while (Serial.available() == 0) {
+      // do nothing, wait for input
+    }
+    String input = Serial.readStringUntil('\n');
+    input.trim();
+    currTemp = input.toFloat();
+
+    //Get accurate data for current humidity
+    Serial.println("Please enter the current humidity. This will be used to calculate the proper offset for the humidity sensor. ");
+
+    while (Serial.available() == 0) {
+      // do nothing, wait for input
+    }
+
+    input = Serial.readStringUntil('\n');
+    input.trim();
+    currHumid = input.toFloat();
+
+  }
+  catch(const std::exception& e)
+  {
+    Serial.println("Failed to read input. Please enter a decimal value.");
+    return; // Do not update offsets
+  }
+
   offsetTemp = 0;
   offsetHumid = 0;
-
-  //Clear the message line of anything that might be leftover from previous inputs
-  while (Serial.available() > 0) {
-    Serial.read();
-  }
-
-  //Get accurate data for current temp
-  Serial.println("Please enter the current temperature in Celsius. This will be used to calculate the proper offset for the termperature sensor. ");
-  while (Serial.available() == 0) {
-    // do nothing, just wait
-  }
-  String input = Serial.readStringUntil('\n');
-  input.trim();
-  float currTemp = input.toFloat();
-
-  //Get accurate data for current humidity
-  Serial.println("Please enter the current humidity. This will be used to calculate the proper offset for the humidity sensor. ");
-
-  while (Serial.available() == 0) {
-    // do nothing, just wait
-  }
-
-  input = Serial.readStringUntil('\n');
-  input.trim();
-  float currHumid = input.toFloat();
 
   offsetTemp = dht.readTemperature() - currTemp;
   offsetHumid = dht.readHumidity() - currHumid;
@@ -127,6 +143,8 @@ void calibrateData(){
 
 
 void changeThresholds(){
+  // TODO add error checking.
+
   //Reset previous thresholds
   lowTempThreshC = 15;
   highTempThreshC = 30;
