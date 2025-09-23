@@ -1,6 +1,10 @@
 // This sketch built ontop of an simple example in the public domain from the DHT Sensor Library by ladyada.
 
+// TODO:
+// - Move hardcoded values to constants
+
 #include "DHT.h"
+#include <stdexcept>
 #define LED_PIN 2
 #define DHTPIN 4 // Digital pin connected to the DHT sensor
 
@@ -22,6 +26,19 @@ float lowTempThreshC = 15;
 float highTempThreshC = 30;
 float lowHumidThresh = 30;
 float highHumidThresh = 70;
+
+// Reads a line from the serial console
+String serialReadLine(const char lineEnding = '\n')
+{
+  // Wait for serial to be available
+  while (Serial.available() == 0);
+  
+  // Read line and trim
+  String input = Serial.readStringUntil('\n');
+  input.trim();
+
+  return input;
+}
 
 void setup() {
   // Start serial console
@@ -46,6 +63,7 @@ void loop() {
     default: break;  // ignore everything else
   }
 
+  // TODO: Move its own function.
   if(readData && millis() - lastSensorReadTime > 1000){
 
     // Reading temperature or humidity takes about 250 milliseconds!
@@ -91,47 +109,41 @@ void loop() {
   }
 }
 
+// Command Functions //
+
 void calibrateData(){
-  //Reset previous offset
+
+  // Reset previous offset
+  offsetTemp = 0;
+  offsetHumid = 0;
+  Serial.println("Removed previous offsets.");
+
+  // Input variables
   float currTemp;
   float currHumid;
 
+  //Clear the message line of anything that might be leftover from previous inputs
+  while (Serial.available() > 0) {
+    Serial.read();
+  }
+
   try
   {
-    //Clear the message line of anything that might be leftover from previous inputs
-    while (Serial.available() > 0) {
-      Serial.read();
-    }
-
-    //Get accurate data for current temp
+    // Get accurate data for current temp
     Serial.println("Please enter the current temperature in Celsius. This will be used to calculate the proper offset for the termperature sensor. ");
-    while (Serial.available() == 0) {
-      // do nothing, wait for input
-    }
-    String input = Serial.readStringUntil('\n');
-    input.trim();
+    String input = serialReadLine();
     currTemp = input.toFloat();
 
-    //Get accurate data for current humidity
+    // Get accurate data for current humidity
     Serial.println("Please enter the current humidity. This will be used to calculate the proper offset for the humidity sensor. ");
-
-    while (Serial.available() == 0) {
-      // do nothing, wait for input
-    }
-
-    input = Serial.readStringUntil('\n');
-    input.trim();
+    input = serialReadLine();
     currHumid = input.toFloat();
-
   }
-  catch(const std::exception& e)
+  catch(const std::invalid_argument& e)
   {
-    Serial.println("Failed to read input. Please enter a decimal value.");
-    return; // Do not update offsets
+    Serial.println("Failed to read input as decimal value.");
+    return;
   }
-
-  offsetTemp = 0;
-  offsetHumid = 0;
 
   offsetTemp = dht.readTemperature() - currTemp;
   offsetHumid = dht.readHumidity() - currHumid;
@@ -145,11 +157,14 @@ void calibrateData(){
 void changeThresholds(){
   // TODO add error checking.
 
-  //Reset previous thresholds
+  // TODO: Discuss do we want to reset the thresholds?
+  //     Yes, we want settings to be reset at start.
+  // Reset previous thresholds
   lowTempThreshC = 15;
   highTempThreshC = 30;
   lowHumidThresh = 30;
   highHumidThresh = 70;
+  Serial.println("Reset previous thresholds.");
 
   //Clear the message line of anything that might be leftover from previous inputs
   while (Serial.available() > 0) {
@@ -158,44 +173,30 @@ void changeThresholds(){
 
   //Get data for temp threshold lower
   Serial.println("Please enter your new lower threshold for Temperature in Celsius ");
-  while (Serial.available() == 0) {
-    // do nothing, just wait
-  }
-  String input = Serial.readStringUntil('\n');
-  input.trim();
-  lowTempThreshC = input.toFloat();
+  float newLowerThreshC = serialReadLine().toFloat();;
 
   //Get data for temp threshold upper
   Serial.println("Please enter your new upper threshold for Temperature in Celsius ");
-
-  while (Serial.available() == 0) {
-    // do nothing, just wait
-  }
-
-  input = Serial.readStringUntil('\n');
-  input.trim();
-  highTempThreshC = input.toFloat();
+  float newHighTempThreshC = serialReadLine().toFloat();;
 
   //Get data for humidity threshold lower
   Serial.println("Please enter your new lower threshold for humidity");
-  while (Serial.available() == 0) {
-    // do nothing, just wait
-  }
-  input = Serial.readStringUntil('\n');
-  input.trim();
-  lowHumidThresh = input.toFloat();
+  float newHumidLowThresh = serialReadLine().toFloat();
 
   //Get data for humidity threshold upper
   Serial.println("Please enter your new upper threshold for humidity ");
+  float newHimidHighThresh = serialReadLine().toFloat();
+  
 
-  while (Serial.available() == 0) {
-    // do nothing, just wait
-  }
+  // Set thresholds
+  lowTempThreshC = newLowerThreshC;
+  highTempThreshC = newHighTempThreshC;
+  lowHumidThresh = newHumidLowThresh;
+  highHumidThresh = newHimidHighThresh;
 
-  input = Serial.readStringUntil('\n');
-  input.trim();
-  highHumidThresh = input.toFloat();
+  
 
+  // Report new thresholds to console.
   Serial.print("Temp Threshold: ");
   Serial.print(lowTempThreshC);
   Serial.print(" to ");
