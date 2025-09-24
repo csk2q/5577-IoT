@@ -1,12 +1,14 @@
 // This sketch was built on top of an example, in the public domain, from the DHT Sensor Library by ladyada.
 
-
 #include "DHT.h"
 #include <stdexcept>
+#include <string>
 #define LED_PIN 2
 #define DHTPIN 4 // Digital pin connected to the DHT sensor
 
 #define DHTTYPE DHT11   // DHT 11
+
+using std::string;
 
 // Constants
 const unsigned long BaudRate = 115200;
@@ -37,7 +39,7 @@ float highHumidThresh = defaultHighHumidThresh;
 // Helper Functions //
 
 // Reads a line from the serial console
-String serialReadLine(const char lineEnding = '\n')
+std::string serialReadLine(const char lineEnding = '\n')
 {
   // Wait for serial to be available
   while (Serial.available() == 0);
@@ -45,8 +47,8 @@ String serialReadLine(const char lineEnding = '\n')
   // Read line and trim
   String input = Serial.readStringUntil('\n');
   input.trim();
-
-  return input;
+  // Serial.println(input); // Print input back to serial
+  return input.c_str();
 }
 
 
@@ -57,11 +59,11 @@ void setup() {
   Serial.begin(BaudRate);
   while (Serial.available() == 0); // Wait for serial to be available
   Serial.println("Hello serial console!");
-  Serial.println("Commands: \
-  G for Go        - Start reading from sensor \
-  S for Stop      - Stop reading from sensor \
-  C for Calibrate - Begin sensor calibration \
-  T for Threshold - Set thresholds for LED behavior \
+  Serial.println("Commands: \n\
+  G for Go        - Start reading from sensor \n\
+  S for Stop      - Stop reading from sensor \n\
+  C for Calibrate - Begin sensor calibration \n\
+  T for Threshold - Set thresholds for LED behavior \n\
   R for Restart   - Soft restarts the ESP32");
 
   // Configure the LED pin
@@ -172,13 +174,13 @@ void calibrateData(){
   {
     // Get accurate data for current temp
     Serial.println("Please enter the current temperature in Celsius. This will be used to calculate the proper offset for the termperature sensor. ");
-    String input = serialReadLine();
-    currTemp = input.toFloat();
+    string input = serialReadLine();
+    currTemp = std::stof(input);
 
     // Get accurate data for current humidity
     Serial.println("Please enter the current humidity. This will be used to calculate the proper offset for the humidity sensor. ");
     input = serialReadLine();
-    currHumid = input.toFloat();
+    currHumid = std::stof(input);
 
     // Set offsets (after string->float conversions)
     offsetTemp = dht.readTemperature() - currTemp;
@@ -215,19 +217,19 @@ void changeThresholds() {
   {
     //Get data for temp threshold lower
     Serial.println("Please enter your new lower threshold for Temperature in Celsius ");
-    float newLowerThreshC = serialReadLine().toFloat();;
+    float newLowerThreshC = std::stof(serialReadLine());
 
     //Get data for temp threshold upper
     Serial.println("Please enter your new upper threshold for Temperature in Celsius ");
-    float newHighTempThreshC = serialReadLine().toFloat();;
+    float newHighTempThreshC = std::stof(serialReadLine());
 
     //Get data for humidity threshold lower
     Serial.println("Please enter your new lower threshold for humidity");
-    float newHumidLowThresh = serialReadLine().toFloat();
+    float newHumidLowThresh = std::stof(serialReadLine());
 
     //Get data for humidity threshold upper
     Serial.println("Please enter your new upper threshold for humidity ");
-    float newHimidHighThresh = serialReadLine().toFloat();
+    float newHimidHighThresh = std::stof(serialReadLine());
 
     // Set thresholds (after string->float conversions)
     lowTempThreshC = newLowerThreshC;
