@@ -1,6 +1,9 @@
 // This sketch was built on top of an example, in the public domain, from the DHT Sensor Library by ladyada.
 
 #include "DHT.h"
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
 #include <stdexcept>
 #include <string>
 #define LED_PIN 2
@@ -35,6 +38,13 @@ float highTempThreshC = defaultHighTempThreshC;
 float lowHumidThresh = defaultLowHumidThresh;
 float highHumidThresh = defaultHighHumidThresh;
 
+
+// Replace with your WiFi credentials
+const char* ssid = "WIFI_NAME";
+const char* password = "WIFI_PASS";
+
+// Flask server URL
+const char* serverName = "http://192.168.1.140:8888/post-data";
 
 // Helper Functions //
 
@@ -71,6 +81,17 @@ void setup() {
 
   // Start communicating with the temperature sensor
   dht.begin();
+
+  //Connecting to Wifi
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.println("Waiting");
+    Serial.print(" WiFi status: ");
+    Serial.println(WiFi.status());
+  }
+  Serial.println("\nConnected!");
 }
 
 void loop() {
@@ -124,6 +145,9 @@ void readSensor()
     Serial.println(F("Failed to read from DHT sensor!"));
     return;
   }
+
+  // Send data to server
+  checkWifi(t - offsetTemp, h - offsetHumid, millis());
 
   // Update last sensor read time
   lastSensorReadTime = millis();
@@ -253,4 +277,33 @@ void changeThresholds() {
   Serial.print(lowHumidThresh);
   Serial.print(" to ");
   Serial.println(highHumidThresh);
+}
+
+void checkWifi(float temp, float humid, unsigned long time) {
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin(serverName);
+
+    http.addHeader("Content-Type", "application/json");
+
+    String jsonData = "{";
+    jsonData += "\"team_number\":2,";
+    jsonData += "\"temperature\":" + String(temp) + ",";
+    jsonData += "\"humidity\":" + String(humid) + ",";
+    jsonData += "\"timestamp\":" + String(time);
+    jsonData += "}";
+
+    int httpResponseCode = http.POST(jsonData);
+
+    if (httpResponseCode > 0) {
+      Serial.println("Server response: " + http.getString());
+    } else {
+      Serial.print("Error code: ");
+      Serial.println(httpResponseCode);
+    }
+
+    http.end();
+  } else {
+    Serial.println("WiFi disconnected");
+  }
 }
