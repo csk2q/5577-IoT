@@ -83,15 +83,15 @@ void setup() {
   dht.begin();
 
   //Connecting to Wifi
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.println("Waiting");
-    Serial.print(" WiFi status: ");
-    Serial.println(WiFi.status());
-  }
-  Serial.println("\nConnected!");
+  // WiFi.begin(ssid, password);
+  // Serial.print("Connecting to WiFi");
+  // while (WiFi.status() != WL_CONNECTED) {
+  //   delay(500);
+  //   Serial.println("Waiting");
+  //   Serial.print(" WiFi status: ");
+  //   Serial.println(WiFi.status());
+  // }
+  // Serial.println("\nConnected!");
 }
 
 void loop() {

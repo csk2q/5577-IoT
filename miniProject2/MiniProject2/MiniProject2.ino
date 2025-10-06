@@ -3,22 +3,30 @@
 // - DHT Sensor Library: https://github.com/adafruit/DHT-sensor-library
 // - Adafruit Unified Sensor Lib: https://github.com/adafruit/Adafruit_Sensor
 
-#include "DHT.h"
+#include <DHT.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include "mbedtls/aes.h"   // ESP32 has built-in mbedTLS
 #include "Base64.h"
+#include <WebServer.h>
+
 
 // Replace with your WiFi credentials
-const char* ssid = "WIFI_NAME";
-const char* password = "WIFI_PASS";
+// const char* ssid = "CasieBroad";
+// const char* password = "8162574964106";
+const char* ssid = "Pixel_1587";
+const char* password = "ChaoticGood2025";
 // 16-byte key (AES-128)
 const unsigned char aesKey[16] = { '1','2','3','4','5','6','7','8','9','0','a','b','c','d','e','f' };
 const unsigned char aesIV[16]  = { 'a','b','c','d','e','f','1','2','3','4','5','6','7','8','9','0' };
 
 // Flask server URL
-const char* serverName = "http://192.168.1.140:8888/post-data";
+const char* serverName = "http://10.10.141.68:8888/post-data";
+
+WebServer server(80); 
+// Variable to store the HTTP request
+String header;
 
 #define LED_PIN 2
 #define DHTPIN 4     // Digital pin connected to the DHT sensor
@@ -56,10 +64,28 @@ void setup() {
     Serial.println(WiFi.status());
   }
   Serial.println("\nConnected!");
+  Serial.println(WiFi.localIP());
+
+
+  server.on("/", handleRoot);
+  server.on("/health", handleHealth);
+  server.on("/sensor", handleSensor);
+  server.on("/config", handleConfig);
+  server.on("/push-now", handlePushNow);
+
+	server.begin(); 
+
 }
 
-void loop() {
 
+
+void loop() {
+  readSerial();
+  readWeb();
+}
+
+
+void readSerial() {
   int r = Serial.read(); // -1 when nothing
   switch ( r ) {
     case 'G':  readData = true;  Serial.println("START");                             break;  // G for Go
@@ -111,6 +137,37 @@ void loop() {
     }
   }
 }
+
+void readWeb(){
+  server.handleClient();
+}
+
+void handleRoot(){
+  Serial.print("Handle Root");
+  server.send(200,"text/html","<html><body>Hello World</body></html>");
+}
+
+void handleHealth(){
+  String healthStatus = "<html><body><p><strong>Sensor Status:</strong>";
+  healthStatus += "Good";
+  healthStatus += "</p></body></html>";
+
+  server.send(200,"text/html", healthStatus);
+}
+
+void handleSensor(){
+
+}
+
+void handleConfig(){
+
+}
+
+void handlePushNow(){
+
+}
+
+
 
 void calibrateData(){
   //Reset previous offset
