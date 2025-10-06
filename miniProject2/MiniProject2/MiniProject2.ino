@@ -1,338 +1,460 @@
-// Example testing sketch for various DHT humidity/temperature sensors written by ladyada
-// REQUIRES the following Arduino libraries:
-// - DHT Sensor Library: https://github.com/adafruit/DHT-sensor-library
-// - Adafruit Unified Sensor Lib: https://github.com/adafruit/Adafruit_Sensor
+// =============================================================================
+// DHT Sensor Monitoring System for ESP32
+// =============================================================================
+// Professional single-file implementation with modular structure
+// Features: Temperature/Humidity monitoring, WiFi, Web server, Data encryption
+// =============================================================================
 
 #include <DHT.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
-#include "mbedtls/aes.h"   // ESP32 has built-in mbedTLS
+#include "mbedtls/aes.h"
 #include "Base64.h"
 #include <WebServer.h>
 
+// =============================================================================
+// Configuration Constants
+// =============================================================================
 
-// Replace with your WiFi credentials
-// const char* ssid = "CasieBroad";
-// const char* password = "8162574964106";
-const char* ssid = "Pixel_1587";
-const char* password = "ChaoticGood2025";
-// 16-byte key (AES-128)
-const unsigned char aesKey[16] = { '1','2','3','4','5','6','7','8','9','0','a','b','c','d','e','f' };
-const unsigned char aesIV[16]  = { 'a','b','c','d','e','f','1','2','3','4','5','6','7','8','9','0' };
+// Device Identity
+const char* DEVICE_NAME = "DHT11 Sensor Monitor";
 
-// Flask server URL
-const char* serverName = "http://10.10.141.68:8888/post-data";
+// Network Configuration
+const char* WIFI_SSID = "Pixel_1587";
+const char* WIFI_PASSWORD = "ChaoticGood2025";
+const char* SERVER_URL = "http://10.62.129.211:8888/post-data";
 
-WebServer server(80); 
-// Variable to store the HTTP request
-String header;
+// Hardware Configuration
+const uint8_t LED_PIN = 2;
+const uint8_t DHT_PIN = 4;
+const uint8_t DHT_TYPE = DHT11;
 
-#define LED_PIN 2
-#define DHTPIN 4     // Digital pin connected to the DHT sensor
+// Security Configuration
+const unsigned char AES_KEY[16] = { 
+    '1','2','3','4','5','6','7','8','9','0','a','b','c','d','e','f' 
+};
+const unsigned char AES_IV[16] = { 
+    'a','b','c','d','e','f','1','2','3','4','5','6','7','8','9','0' 
+};
 
-#define DHTTYPE DHT11   // DHT 11
+// Default Thresholds
+const float DEFAULT_TEMP_LOW = 15.0;
+const float DEFAULT_TEMP_HIGH = 30.0;
+const float DEFAULT_HUMIDITY_LOW = 30.0;
+const float DEFAULT_HUMIDITY_HIGH = 70.0;
 
-// Initialize DHT sensor.
-DHT dht(DHTPIN, DHTTYPE);
-bool readData = false;
-unsigned long previousData = 0;
+// Timing Constants
+const unsigned long SENSOR_READ_INTERVAL_MS = 1000;
+const unsigned long SERIAL_BAUD_RATE = 115200;
 
-//Offsets
-float offsetTemp = 0;
-float offsetHumid = 0;
+// =============================================================================
+// Data Structures
+// =============================================================================
 
-//Thresholds
-float lowTempThreshC = 15;
-float highTempThreshC = 30;
-float lowHumidThresh = 30;
-float highHumidThresh = 70;
+struct SensorData {
+    float temperature;
+    float humidity;
+    unsigned long timestamp;
+};
+
+struct CalibrationData {
+    float temperatureOffset;
+    float humidityOffset;
+};
+
+struct ThresholdData {
+    float tempLow;
+    float tempHigh;
+    float humidityLow;
+    float humidityHigh;
+};
+
+// =============================================================================
+// Global Variables
+// =============================================================================
+
+// Hardware Objects
+DHT dhtSensor(DHT_PIN, DHT_TYPE);
+WebServer webServer(80);
+
+// Application State
+bool isReadingData = false;
+unsigned long lastSensorReadTime = 0;
+
+// Configuration Data
+CalibrationData calibration = {0, 0};
+ThresholdData thresholds = {
+    DEFAULT_TEMP_LOW, 
+    DEFAULT_TEMP_HIGH, 
+    DEFAULT_HUMIDITY_LOW, 
+    DEFAULT_HUMIDITY_HIGH
+};
+
+// =============================================================================
+// Core Hardware Functions
+// =============================================================================
+
+void initializeHardware() {
+    pinMode(LED_PIN, OUTPUT);
+    digitalWrite(LED_PIN, LOW);
+    dhtSensor.begin();
+    Serial.begin(SERIAL_BAUD_RATE);
+}
+
+void setLED(bool state) {
+    digitalWrite(LED_PIN, state);
+}
+
+void toggleLED() {
+    digitalWrite(LED_PIN, !digitalRead(LED_PIN));
+}
+
+// =============================================================================
+// Network Functions
+// =============================================================================
+
+void connectToWiFi() {
+    Serial.print("Connecting to: ");
+    Serial.println(WIFI_SSID);
+    
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+    }
+    
+    Serial.println("\n✓ WiFi connected");
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
+}
+
+bool isWiFiConnected() {
+    return WiFi.status() == WL_CONNECTED;
+}
+
+// =============================================================================
+// Sensor Management Functions
+// =============================================================================
+
+bool readSensorData(SensorData& data) {
+    float humidity = dhtSensor.readHumidity();
+    float temperature = dhtSensor.readTemperature();
+    
+    if (isnan(humidity) || isnan(temperature)) {
+        Serial.println("✗ Failed to read sensor data");
+        return false;
+    }
+    
+    // Apply calibration offsets
+    data.temperature = temperature - calibration.temperatureOffset;
+    data.humidity = humidity - calibration.humidityOffset;
+    data.timestamp = millis();
+    
+    return true;
+}
+
+void displaySensorData(const SensorData& data) {
+    Serial.print("Humidity: ");
+    Serial.print(data.humidity);
+    Serial.print("%  Temperature: ");
+    Serial.print(data.temperature);
+    Serial.println("°C");
+}
+
+// =============================================================================
+// LED Control Functions
+// =============================================================================
+
+void updateLEDBasedOnData(const SensorData& data) {
+    if (data.temperature < thresholds.tempLow || data.humidity < thresholds.humidityLow) {
+        // Below thresholds: blink LED
+        toggleLED();
+    } else if (data.temperature > thresholds.tempHigh || data.humidity > thresholds.humidityHigh) {
+        // Above thresholds: LED ON
+        setLED(true);
+    } else {
+        // Within normal range: LED OFF
+        setLED(false);
+    }
+}
+
+// =============================================================================
+// Data Encryption Functions
+// =============================================================================
+
+String encryptData(const String& plainText) {
+    size_t inputLen = plainText.length();
+    size_t paddedLen = ((inputLen + 15) / 16) * 16;
+    
+    unsigned char input[paddedLen];
+    unsigned char output[paddedLen];
+    memset(input, 0, paddedLen);
+    memcpy(input, plainText.c_str(), inputLen);
+    
+    mbedtls_aes_context aes;
+    mbedtls_aes_init(&aes);
+    mbedtls_aes_setkey_enc(&aes, AES_KEY, 128);
+    
+    unsigned char iv[16];
+    memcpy(iv, AES_IV, 16);
+    
+    mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, paddedLen, iv, input, output);
+    mbedtls_aes_free(&aes);
+    
+    return base64::encode(output, paddedLen);
+}
+
+// =============================================================================
+// Data Transmission Functions
+// =============================================================================
+
+String createJSONPayload(const SensorData& data) {
+    StaticJsonDocument<200> doc;
+    doc["team_number"] = 2;
+    doc["temperature"] = data.temperature;
+    doc["humidity"] = data.humidity;
+    doc["timestamp"] = data.timestamp;
+    
+    String jsonString;
+    serializeJson(doc, jsonString);
+    return jsonString;
+}
+
+bool transmitSensorData(const SensorData& data) {
+    if (!isWiFiConnected()) {
+        Serial.println("✗ WiFi not connected - cannot transmit data");
+        return false;
+    }
+    
+    HTTPClient http;
+    http.begin(SERVER_URL);
+    http.addHeader("Content-Type", "text/plain");
+    
+    String jsonData = createJSONPayload(data);
+    String encryptedData = encryptData(jsonData);
+    
+    int responseCode = http.POST(encryptedData);
+    http.end();
+    
+    if (responseCode > 0) {
+        Serial.println("✓ Data transmitted successfully");
+        return true;
+    } else {
+        Serial.print("✗ Transmission failed. Code: ");
+        Serial.println(responseCode);
+        return false;
+    }
+}
+
+// =============================================================================
+// Web Server Handler Functions
+// =============================================================================
+
+void handleRoot() {
+    String html = R"(
+        <html>
+            <body>
+                <h1>DHT Sensor Monitor</h1>
+                <ul>
+                    <li><a href="/health">System Health</a></li>
+                    <li><a href="/sensor">Sensor Data</a></li>
+                    <li><a href="/push-now">Force Reading</a></li>
+                </ul>
+            </body>
+        </html>
+    )";
+    webServer.send(200, "text/html", html);
+}
+
+void handleHealth() {
+    String status = isWiFiConnected() ? "Connected" : "Disconnected";
+    String html = "<html><body>";
+    html += "<h1>System Health</h1>";
+    html += "<p><strong>WiFi:</strong> " + status + "</p>";
+    html += "<p><strong>IP:</strong> " + WiFi.localIP().toString() + "</p>";
+    html += "<p><strong>Uptime:</strong> " + String(millis() / 1000) + "s</p>";
+    html += "</body></html>";
+    
+    webServer.send(200, "text/html", html);
+}
+
+void handleSensorData() {
+    SensorData data;
+    if (readSensorData(data)) {
+        String json = createJSONPayload(data);
+        webServer.send(200, "application/json", json);
+    } else {
+        webServer.send(500, "application/json", "{\"error\":\"Sensor read failed\"}");
+    }
+}
+
+void handlePushNow() {
+    SensorData data;
+    if (readSensorData(data)) {
+        displaySensorData(data);
+        updateLEDBasedOnData(data);
+        transmitSensorData(data);
+        webServer.send(200, "text/plain", "Data pushed successfully");
+    } else {
+        webServer.send(500, "text/plain", "Sensor read failed");
+    }
+}
+
+void initializeWebServer() {
+    webServer.on("/", handleRoot);
+    webServer.on("/health", handleHealth);
+    webServer.on("/sensor", handleSensorData);
+    webServer.on("/push-now", handlePushNow);
+    webServer.begin();
+    Serial.println("✓ Web server started on port 80");
+}
+
+// =============================================================================
+// Serial Command Processing Functions
+// =============================================================================
+
+void clearSerialBuffer() {
+    while (Serial.available() > 0) {
+        Serial.read();
+    }
+}
+
+float readSerialFloat(const String& prompt) {
+    Serial.println(prompt);
+    while (!Serial.available()) {
+        delay(100);
+    }
+    String input = Serial.readStringUntil('\n');
+    input.trim();
+    return input.toFloat();
+}
+
+void processCalibration() {
+    Serial.println("\n=== SENSOR CALIBRATION ===");
+    clearSerialBuffer();
+    
+    float actualTemp = readSerialFloat("Enter actual temperature (°C):");
+    float actualHumidity = readSerialFloat("Enter actual humidity (%):");
+    
+    SensorData current;
+    if (readSensorData(current)) {
+        calibration.temperatureOffset = current.temperature - actualTemp;
+        calibration.humidityOffset = current.humidity - actualHumidity;
+        
+        Serial.println("✓ Calibration complete:");
+        Serial.printf("  Temp offset: %.2f°C\n", calibration.temperatureOffset);
+        Serial.printf("  Humidity offset: %.2f%%\n", calibration.humidityOffset);
+    } else {
+        Serial.println("✗ Failed to read current sensor values");
+    }
+}
+
+void processThresholdConfiguration() {
+    Serial.println("\n=== THRESHOLD CONFIGURATION ===");
+    clearSerialBuffer();
+    
+    thresholds.tempLow = readSerialFloat("Enter low temperature threshold (°C):");
+    thresholds.tempHigh = readSerialFloat("Enter high temperature threshold (°C):");
+    thresholds.humidityLow = readSerialFloat("Enter low humidity threshold (%):");
+    thresholds.humidityHigh = readSerialFloat("Enter high humidity threshold (%):");
+    
+    Serial.println("✓ Thresholds updated:");
+    Serial.printf("  Temperature: %.1f°C to %.1f°C\n", thresholds.tempLow, thresholds.tempHigh);
+    Serial.printf("  Humidity: %.1f%% to %.1f%%\n", thresholds.humidityLow, thresholds.humidityHigh);
+}
+
+void processSerialCommand(char command) {
+    switch (command) {
+        case 'G': // Start continuous reading
+            isReadingData = true;
+            Serial.println("✓ START: Continuous reading enabled");
+            break;
+            
+        case 'S': // Stop continuous reading
+            isReadingData = false;
+            setLED(false);
+            Serial.println("✓ STOP: Continuous reading disabled");
+            break;
+            
+        case 'C': // Calibrate sensors
+            isReadingData = false;
+            setLED(false);
+            processCalibration();
+            break;
+            
+        case 'T': // Configure thresholds
+            isReadingData = false;
+            setLED(false);
+            processThresholdConfiguration();
+            break;
+            
+        default:
+            // Ignore unrecognized commands
+            break;
+    }
+}
+
+void checkSerialCommands() {
+    if (Serial.available()) {
+        char command = Serial.read();
+        processSerialCommand(command);
+    }
+}
+
+// =============================================================================
+// Main Application Functions
+// =============================================================================
+
+void processSensorReading() {
+    unsigned long currentTime = millis();
+    if (currentTime - lastSensorReadTime < SENSOR_READ_INTERVAL_MS) {
+        return;
+    }
+    
+    SensorData data;
+    if (readSensorData(data)) {
+        displaySensorData(data);
+        updateLEDBasedOnData(data);
+        transmitSensorData(data);
+        lastSensorReadTime = currentTime;
+    }
+}
+
+void initializeSystem() {
+    Serial.println("\n=== " + String(DEVICE_NAME) + " ===");
+    
+    // Initialize hardware
+    initializeHardware();
+    
+    // Connect to network
+    connectToWiFi();
+    
+    // Start web server
+    initializeWebServer();
+    
+    Serial.println("✓ System initialized successfully");
+    Serial.println("Available Commands: G(Start), S(Stop), C(Calibrate), T(Thresholds)");
+}
+
+// =============================================================================
+// Arduino Main Functions
+// =============================================================================
 
 void setup() {
-  Serial.begin(115200);
-  Serial.println(F("DHTxx test!"));
-  pinMode(LED_PIN, OUTPUT);
-  dht.begin();
-
-  //Connecting to Wifi
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.println("Waiting");
-    Serial.print(" WiFi status: ");
-    Serial.println(WiFi.status());
-  }
-  Serial.println("\nConnected!");
-  Serial.println(WiFi.localIP());
-
-
-  server.on("/", handleRoot);
-  server.on("/health", handleHealth);
-  server.on("/sensor", handleSensor);
-  server.on("/config", handleConfig);
-  server.on("/push-now", handlePushNow);
-
-	server.begin(); 
+    initializeSystem();
 }
-
-
 
 void loop() {
-  readSerial();
-  readWeb();
-}
-
-
-void readSerial() {
-  int r = Serial.read(); // -1 when nothing
-  switch ( r ) {
-    case 'G':  readData = true;  Serial.println("START");                             break;  // G for Go
-    case 'S':  readData = false; digitalWrite(LED_PIN, LOW); Serial.println("STOP");  break;  // S for Stop
-    case 'C':  readData = false; digitalWrite(LED_PIN, LOW); calibrateData();         break;  // C for Calibrate
-    case 'T':  readData = false; digitalWrite(LED_PIN, LOW); changeThresholds();      break;  // T for Threshold
-    default: break;  // ignore everything else
-  }
-  
-
-  if(readData){
-    readSensor();
-  }
-}
-
-void readWeb(){
-  server.handleClient();
-}
-
-void readSensor(){
-    // Reading temperature or humidity takes about 250 milliseconds!
-    // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
-    float h = dht.readHumidity();
-    // Read temperature as Celsius (the default)
-    float t = dht.readTemperature();
-    // Read temperature as Fahrenheit (isFahrenheit = true)
-    float f = dht.readTemperature(true);
-
-
-    if(millis() - previousData > 1000){
-      // Check if any reads failed and exit early (to try again).
-      if (isnan(h) || isnan(t) || isnan(f)) {
-        Serial.println(F("Failed to read from DHT sensor!"));
-        return;
-      }
-
-      previousData = millis();
-      Serial.print(F("Humidity: "));
-      Serial.print(h - offsetHumid);
-      Serial.print(F("%  Temperature: "));
-      Serial.print(t - offsetTemp);
-      Serial.println(F("°C "));
-      /*Serial.print((f - offsetTemp));
-      Serial.println(F("°F "));*/
-
-      checkWifi(t - offsetTemp, h - offsetHumid, millis());
-
-      //If the temperature is below 15°C or humidity is below 30%, the LED should blink every second.
-      if((t - offsetTemp) < lowTempThreshC || (h - offsetHumid) < lowHumidThresh){
-        digitalWrite(LED_PIN, !digitalRead(LED_PIN));
-      //If the temperature exceeds 30°C or humidity exceeds 70%, the LED should turn on.
-      } else if((t - offsetTemp) > highTempThreshC || (h - offsetHumid) > highHumidThresh){
-        digitalWrite(LED_PIN, HIGH);
-      //For temperature between 15°C and 30°C and humidity between 30% and 70%, the LED should remain off.
-      } else {
-        digitalWrite(LED_PIN, LOW);
-      }
+    // Handle serial commands
+    checkSerialCommands();
+    
+    // Handle web server requests
+    webServer.handleClient();
+    
+    // Process sensor readings if enabled
+    if (isReadingData) {
+        processSensorReading();
     }
-}
-
-void handleRoot(){
-  Serial.print("Handle Root");
-  server.send(200,"text/html","<html><body>Hello World</body></html>");
-}
-
-void handleHealth(){
-  String healthStatus = "<html><body><p><strong>Sensor Status:&nbsp;</strong>";
-  healthStatus += "Good";
-  healthStatus += "</p></body></html>";
-
-  server.send(200,"text/html", healthStatus);
-}
-
-void handleSensor(){
-    float h = dht.readHumidity();
-    float t = dht.readTemperature();
-
-    String jsonData = "{";
-    jsonData += "\"team_number\":2,";
-    jsonData += "\"temperature\":" + String(t) + ",";
-    jsonData += "\"humidity\":" + String(h) + ",";
-    jsonData += "}";
-
-    String encryptedData = encryptAES(jsonData);
-
-    server.send(200,"text/json", jsonData);
-}
-
-void handleConfig(){
-
-}
-
-void handlePushNow(){
-  readSensor();
-}
-
-
-
-void calibrateData(){
-  //Reset previous offset
-  offsetTemp = 0;
-  offsetHumid = 0;
-
-  //Clear the message line of anything that might be leftover from previous inputs
-  while (Serial.available() > 0) {
-    Serial.read();
-  }
-
-  //Get accurate data for current temp
-  Serial.println("Please enter the current temperature in Celsius. This will be used to calculate the proper offset for the termperature sensor. ");
-  while (Serial.available() == 0) {
-    // do nothing, just wait
-  }
-  String input = Serial.readStringUntil('\n');
-  input.trim();
-  float currTemp = input.toFloat();
-
-  //Get accurate data for current humidity
-  Serial.println("Please enter the current humidity. This will be used to calculate the proper offset for the humidity sensor. ");
-
-  while (Serial.available() == 0) {
-    // do nothing, just wait
-  }
-
-  input = Serial.readStringUntil('\n');
-  input.trim();
-  float currHumid = input.toFloat();
-
-  offsetTemp = dht.readTemperature() - currTemp;
-  offsetHumid = dht.readHumidity() - currHumid;
-  Serial.print("Offset Temp: ");
-  Serial.println(offsetTemp);
-  Serial.print("Offset Humidity: ");
-  Serial.println(offsetHumid);
-}
-
-
-void changeThresholds(){
-  //Reset previous thresholds
-  lowTempThreshC = 15;
-  highTempThreshC = 30;
-  lowHumidThresh = 30;
-  highHumidThresh = 70;
-
-  //Clear the message line of anything that might be leftover from previous inputs
-  while (Serial.available() > 0) {
-    Serial.read();
-  }
-
-  //Get data for temp threshold lower
-  Serial.println("Please enter your new lower threshold for Temperature in Celsius ");
-  while (Serial.available() == 0) {
-    // do nothing, just wait
-  }
-  String input = Serial.readStringUntil('\n');
-  input.trim();
-  lowTempThreshC = input.toFloat();
-
-  //Get data for temp threshold upper
-  Serial.println("Please enter your new upper threshold for Temperature in Celsius ");
-
-  while (Serial.available() == 0) {
-    // do nothing, just wait
-  }
-
-  input = Serial.readStringUntil('\n');
-  input.trim();
-  highTempThreshC = input.toFloat();
-
-  //Get data for humidity threshold lower
-  Serial.println("Please enter your new lower threshold for humidity");
-  while (Serial.available() == 0) {
-    // do nothing, just wait
-  }
-  input = Serial.readStringUntil('\n');
-  input.trim();
-  lowHumidThresh = input.toFloat();
-
-  //Get data for humidity threshold upper
-  Serial.println("Please enter your new upper threshold for humidity ");
-
-  while (Serial.available() == 0) {
-    // do nothing, just wait
-  }
-
-  input = Serial.readStringUntil('\n');
-  input.trim();
-  highHumidThresh = input.toFloat();
-
-  Serial.print("Temp Threshold: ");
-  Serial.print(lowTempThreshC);
-  Serial.print(" to ");
-  Serial.println(highTempThreshC);
-
-  Serial.print("Humidity Threshold: ");
-  Serial.print(lowHumidThresh);
-  Serial.print(" to ");
-  Serial.println(highHumidThresh);
-}
-
-void checkWifi(float temp, float humid, unsigned long time) {
-  if (WiFi.status() == WL_CONNECTED) {
-    HTTPClient http;
-    http.begin(serverName);
-
-    http.addHeader("Content-Type", "text/plain");
-
-    String jsonData = "{";
-    jsonData += "\"team_number\":2,";
-    jsonData += "\"temperature\":" + String(temp) + ",";
-    jsonData += "\"humidity\":" + String(humid) + ",";
-    jsonData += "\"timestamp\":" + String(time);  // number, no quotes
-    jsonData += "}";
-
-
-    String encryptedData = encryptAES(jsonData);
-    int httpResponseCode = http.POST(encryptedData);
-
-    if (httpResponseCode > 0) {
-      Serial.println("Server response: " + http.getString());
-    } else {
-      Serial.print("Error code: ");
-      Serial.println(httpResponseCode);
-    }
-
-    http.end();
-  } else {
-    Serial.println("WiFi disconnected");
-  }
-}
-
-String encryptAES(String plainText) {
-  int len = plainText.length();
-  int paddedLen = ((len + 15) / 16) * 16;
-  unsigned char input[paddedLen];
-  unsigned char output[paddedLen];
-  memset(input, 0, paddedLen);
-  memcpy(input, plainText.c_str(), len);
-
-  mbedtls_aes_context aes;
-  mbedtls_aes_init(&aes);
-  mbedtls_aes_setkey_enc(&aes, aesKey, 128);
-
-  unsigned char iv_copy[16];
-  memcpy(iv_copy, aesIV, 16);
-
-  mbedtls_aes_crypt_cbc(&aes, MBEDTLS_AES_ENCRYPT, paddedLen, iv_copy, input, output);
-  mbedtls_aes_free(&aes);
-
-  return base64::encode(output, paddedLen);
 }
