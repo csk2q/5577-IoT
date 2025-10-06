@@ -74,7 +74,6 @@ void setup() {
   server.on("/push-now", handlePushNow);
 
 	server.begin(); 
-
 }
 
 
@@ -97,6 +96,15 @@ void readSerial() {
   
 
   if(readData){
+    readSensor();
+  }
+}
+
+void readWeb(){
+  server.handleClient();
+}
+
+void readSensor(){
     // Reading temperature or humidity takes about 250 milliseconds!
     // Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
     float h = dht.readHumidity();
@@ -135,11 +143,6 @@ void readSerial() {
         digitalWrite(LED_PIN, LOW);
       }
     }
-  }
-}
-
-void readWeb(){
-  server.handleClient();
 }
 
 void handleRoot(){
@@ -148,7 +151,7 @@ void handleRoot(){
 }
 
 void handleHealth(){
-  String healthStatus = "<html><body><p><strong>Sensor Status:</strong>";
+  String healthStatus = "<html><body><p><strong>Sensor Status:&nbsp;</strong>";
   healthStatus += "Good";
   healthStatus += "</p></body></html>";
 
@@ -156,7 +159,18 @@ void handleHealth(){
 }
 
 void handleSensor(){
+    float h = dht.readHumidity();
+    float t = dht.readTemperature();
 
+    String jsonData = "{";
+    jsonData += "\"team_number\":2,";
+    jsonData += "\"temperature\":" + String(t) + ",";
+    jsonData += "\"humidity\":" + String(h) + ",";
+    jsonData += "}";
+
+    String encryptedData = encryptAES(jsonData);
+
+    server.send(200,"text/json", jsonData);
 }
 
 void handleConfig(){
@@ -164,7 +178,7 @@ void handleConfig(){
 }
 
 void handlePushNow(){
-
+  readSensor();
 }
 
 
