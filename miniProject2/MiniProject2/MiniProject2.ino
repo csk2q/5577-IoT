@@ -20,11 +20,6 @@
 // Device Identity
 const char* DEVICE_NAME = "DHT11 Sensor Monitor";
 
-// Network Configuration
-const char* WIFI_SSID = "Pixel_1587";
-const char* WIFI_PASSWORD = "ChaoticGood2025";
-const char* SERVER_URL = "http://10.62.129.211:8888/post-data";
-
 // Hardware Configuration
 const uint8_t LED_PIN = 2;
 const uint8_t DHT_PIN = 4;
@@ -47,6 +42,7 @@ const float DEFAULT_HUMIDITY_HIGH = 70.0;
 // Timing Constants
 const unsigned long SENSOR_READ_INTERVAL_MS = 1000;
 const unsigned long SERIAL_BAUD_RATE = 115200;
+const unsigned long CONFIG_TIMEOUT_MS = 30000; // 30 seconds for configuration
 
 // =============================================================================
 // Data Structures
@@ -70,6 +66,17 @@ struct ThresholdData {
     float humidityHigh;
 };
 
+struct ConfigRequest {
+    float actual_temperature;
+    float actual_humidity;
+};
+
+struct NetworkConfig {
+    String ssid;
+    String password;
+    String serverUrl;
+};
+
 // =============================================================================
 // Global Variables
 // =============================================================================
@@ -91,6 +98,115 @@ ThresholdData thresholds = {
     DEFAULT_HUMIDITY_HIGH
 };
 
+// Network Configuration (set via serial)
+NetworkConfig networkConfig;
+
+// =============================================================================
+// Serial Configuration Functions
+// =============================================================================
+
+String readSerialLine(unsigned long timeoutMs = 30000) {
+    String input = "";
+    unsigned long startTime = millis();
+    
+    while (millis() - startTime < timeoutMs) {
+        if (Serial.available()) {
+            char c = Serial.read();
+            if (c == '\n' || c == '\r') {
+                if (input.length() > 0) {
+                    break;
+                }
+            } else {
+                input += c;
+            }
+        }
+        delay(10);
+    }
+    
+    input.trim();
+    return input;
+}
+
+bool promptForConfiguration() {
+    Serial.println("\n" + String(DEVICE_NAME));
+    Serial.println("==========================================");
+    Serial.println("NETWORK CONFIGURATION SETUP");
+    Serial.println("==========================================");
+    Serial.println("Please enter your network configuration:");
+    Serial.println("(You have 30 seconds for each prompt)");
+    Serial.println();
+
+    // WiFi SSID
+    Serial.println("Enter WiFi SSID:");
+    networkConfig.ssid = readSerialLine(CONFIG_TIMEOUT_MS);
+    if (networkConfig.ssid.length() == 0) {
+        Serial.println("✗ No SSID provided. Using default: 'ESP32-DHT'");
+        networkConfig.ssid = "ESP32-DHT";
+    } else {
+        Serial.println("✓ SSID: " + networkConfig.ssid);
+    }
+
+    // WiFi Password
+    Serial.println("Enter WiFi Password (press Enter for open network):");
+    networkConfig.password = readSerialLine(CONFIG_TIMEOUT_MS);
+    if (networkConfig.password.length() == 0) {
+        Serial.println("✓ No password - using open network");
+    } else {
+        Serial.println("✓ Password provided");
+    }
+
+    // Server URL
+    Serial.println("Enter Server URL (e.g., http://192.168.1.100:8888/post-data):");
+    networkConfig.serverUrl = readSerialLine(CONFIG_TIMEOUT_MS);
+    if (networkConfig.serverUrl.length() == 0) {
+        Serial.println("✗ No server URL provided. Using default.");
+        networkConfig.serverUrl = "http://192.168.1.100:8888/post-data";
+    } else {
+        Serial.println("✓ Server URL: " + networkConfig.serverUrl);
+    }
+
+    // Confirm configuration
+    Serial.println("\n==========================================");
+    Serial.println("CONFIGURATION SUMMARY:");
+    Serial.println("==========================================");
+    Serial.println("WiFi SSID: " + networkConfig.ssid);
+    Serial.println("WiFi Password: " + String(networkConfig.password.length() > 0 ? "***" : "[None]"));
+    Serial.println("Server URL: " + networkConfig.serverUrl);
+    Serial.println("==========================================");
+    Serial.println("Type 'Y' to confirm or 'N' to restart configuration:");
+
+    String confirmation = readSerialLine(CONFIG_TIMEOUT_MS);
+    confirmation.toLowerCase();
+    
+    if (confirmation == "y" || confirmation == "yes") {
+        Serial.println("✓ Configuration confirmed!");
+        return true;
+    } else {
+        Serial.println("✗ Configuration cancelled. Restarting...");
+        return false;
+    }
+}
+
+void waitForSerialConnection() {
+    Serial.begin(SERIAL_BAUD_RATE);
+    delay(1000); // Give time for serial to initialize
+    
+    unsigned long startTime = millis();
+    Serial.println("Waiting for serial connection...");
+    
+    // Wait for serial connection or timeout
+    while (millis() - startTime < 5000) {
+        if (Serial) {
+            break;
+        }
+        delay(100);
+    }
+    
+    if (!Serial) {
+        Serial.begin(SERIAL_BAUD_RATE);
+    }
+}
+
 // =============================================================================
 // Core Hardware Functions
 // =============================================================================
@@ -99,7 +215,6 @@ void initializeHardware() {
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
     dhtSensor.begin();
-    Serial.begin(SERIAL_BAUD_RATE);
 }
 
 void setLED(bool state) {
@@ -114,20 +229,43 @@ void toggleLED() {
 // Network Functions
 // =============================================================================
 
-void connectToWiFi() {
+bool connectToWiFi() {
+    if (networkConfig.ssid.length() == 0) {
+        Serial.println("✗ No WiFi configuration available");
+        return false;
+    }
+    
     Serial.print("Connecting to: ");
-    Serial.println(WIFI_SSID);
+    Serial.println(networkConfig.ssid);
     
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    // Handle open network (no password)
+    if (networkConfig.password.length() == 0) {
+        WiFi.begin(networkConfig.ssid.c_str());
+    } else {
+        WiFi.begin(networkConfig.ssid.c_str(), networkConfig.password.c_str());
+    }
     
-    while (WiFi.status() != WL_CONNECTED) {
+    unsigned long startTime = millis();
+    bool connected = false;
+    
+    while (millis() - startTime < 20000) { // 20 second timeout
+        if (WiFi.status() == WL_CONNECTED) {
+            connected = true;
+            break;
+        }
         delay(500);
         Serial.print(".");
     }
     
-    Serial.println("\n✓ WiFi connected");
-    Serial.print("IP Address: ");
-    Serial.println(WiFi.localIP());
+    if (connected) {
+        Serial.println("\n✓ WiFi connected");
+        Serial.print("IP Address: ");
+        Serial.println(WiFi.localIP());
+        return true;
+    } else {
+        Serial.println("\n✗ WiFi connection failed");
+        return false;
+    }
 }
 
 bool isWiFiConnected() {
@@ -161,6 +299,30 @@ void displaySensorData(const SensorData& data) {
     Serial.print("%  Temperature: ");
     Serial.print(data.temperature);
     Serial.println("°C");
+}
+
+// =============================================================================
+// Calibration Functions
+// =============================================================================
+
+bool performCalibration(float actualTemperature, float actualHumidity) {
+    SensorData currentReading;
+    if (!readSensorData(currentReading)) {
+        Serial.println("✗ Calibration failed: Could not read sensor data");
+        return false;
+    }
+    
+    // Calculate new offsets
+    calibration.temperatureOffset = currentReading.temperature - actualTemperature;
+    calibration.humidityOffset = currentReading.humidity - actualHumidity;
+    
+    Serial.println("✓ Calibration completed successfully:");
+    Serial.printf("  Temperature offset: %.2f°C\n", calibration.temperatureOffset);
+    Serial.printf("  Humidity offset: %.2f%%\n", calibration.humidityOffset);
+    Serial.printf("  New calibrated values - Temp: %.1f°C, Humidity: %.1f%%\n", 
+                  actualTemperature, actualHumidity);
+    
+    return true;
 }
 
 // =============================================================================
@@ -222,14 +384,37 @@ String createJSONPayload(const SensorData& data) {
     return jsonString;
 }
 
+String createCalibrationJSONPayload() {
+    StaticJsonDocument<300> doc;
+    doc["calibration"]["temperature_offset"] = calibration.temperatureOffset;
+    doc["calibration"]["humidity_offset"] = calibration.humidityOffset;
+    doc["calibration"]["current_temperature_raw"] = dhtSensor.readTemperature();
+    doc["calibration"]["current_humidity_raw"] = dhtSensor.readHumidity();
+    
+    SensorData calibrated;
+    if (readSensorData(calibrated)) {
+        doc["calibration"]["current_temperature_calibrated"] = calibrated.temperature;
+        doc["calibration"]["current_humidity_calibrated"] = calibrated.humidity;
+    }
+    
+    String jsonString;
+    serializeJson(doc, jsonString);
+    return jsonString;
+}
+
 bool transmitSensorData(const SensorData& data) {
     if (!isWiFiConnected()) {
         Serial.println("✗ WiFi not connected - cannot transmit data");
         return false;
     }
     
+    if (networkConfig.serverUrl.length() == 0) {
+        Serial.println("✗ No server URL configured");
+        return false;
+    }
+    
     HTTPClient http;
-    http.begin(SERVER_URL);
+    http.begin(networkConfig.serverUrl.c_str());
     http.addHeader("Content-Type", "text/plain");
     
     String jsonData = createJSONPayload(data);
@@ -260,8 +445,20 @@ void handleRoot() {
                 <ul>
                     <li><a href="/health">System Health</a></li>
                     <li><a href="/sensor">Sensor Data</a></li>
+                    <li><a href="/config">Calibration Status</a></li>
                     <li><a href="/push-now">Force Reading</a></li>
                 </ul>
+                <h2>Calibration API</h2>
+                <p>POST JSON to /config with:</p>
+                <pre>
+{
+    "actual_temperature": 25.0,
+    "actual_humidity": 50.0
+}
+                </pre>
+                <h2>Network Configuration</h2>
+                <p><strong>WiFi SSID:</strong> )" + networkConfig.ssid + R"(</p>
+                <p><strong>Server URL:</strong> )" + networkConfig.serverUrl + R"(</p>
             </body>
         </html>
     )";
@@ -275,6 +472,9 @@ void handleHealth() {
     html += "<p><strong>WiFi:</strong> " + status + "</p>";
     html += "<p><strong>IP:</strong> " + WiFi.localIP().toString() + "</p>";
     html += "<p><strong>Uptime:</strong> " + String(millis() / 1000) + "s</p>";
+    html += "<p><strong>Sensor Reading:</strong> " + String(isReadingData ? "Active" : "Inactive") + "</p>";
+    html += "<p><strong>WiFi SSID:</strong> " + networkConfig.ssid + "</p>";
+    html += "<p><strong>Server URL:</strong> " + networkConfig.serverUrl + "</p>";
     html += "</body></html>";
     
     webServer.send(200, "text/html", html);
@@ -287,6 +487,78 @@ void handleSensorData() {
         webServer.send(200, "application/json", json);
     } else {
         webServer.send(500, "application/json", "{\"error\":\"Sensor read failed\"}");
+    }
+}
+
+void handleConfig() {
+    if (webServer.method() == HTTP_GET) {
+        // Return current calibration status
+        String json = createCalibrationJSONPayload();
+        webServer.send(200, "application/json", json);
+    }
+    else if (webServer.method() == HTTP_POST) {
+        // Handle calibration via JSON
+        String contentType = webServer.header("Content-Type");
+        
+        if (contentType != "application/json") {
+            webServer.send(400, "application/json", 
+                "{\"error\":\"Content-Type must be application/json\"}");
+            return;
+        }
+        
+        String postBody = webServer.arg("plain");
+        
+        // Parse JSON
+        StaticJsonDocument<200> doc;
+        DeserializationError error = deserializeJson(doc, postBody);
+        
+        if (error) {
+            webServer.send(400, "application/json", 
+                "{\"error\":\"Invalid JSON: " + String(error.c_str()) + "\"}");
+            return;
+        }
+        
+        // Validate required fields
+        if (!doc.containsKey("actual_temperature") || !doc.containsKey("actual_humidity")) {
+            webServer.send(400, "application/json", 
+                "{\"error\":\"Missing required fields: actual_temperature and actual_humidity\"}");
+            return;
+        }
+        
+        float actualTemp = doc["actual_temperature"];
+        float actualHumidity = doc["actual_humidity"];
+        
+        // Validate numeric values
+        if (isnan(actualTemp) || isnan(actualHumidity)) {
+            webServer.send(400, "application/json", 
+                "{\"error\":\"Invalid numeric values provided\"}");
+            return;
+        }
+        
+        Serial.println("📡 Received calibration request via REST API");
+        Serial.printf("  Actual Temperature: %.1f°C\n", actualTemp);
+        Serial.printf("  Actual Humidity: %.1f%%\n", actualHumidity);
+        
+        // Perform calibration
+        if (performCalibration(actualTemp, actualHumidity)) {
+            // Return success response with new calibration data
+            StaticJsonDocument<300> responseDoc;
+            responseDoc["status"] = "success";
+            responseDoc["message"] = "Calibration completed successfully";
+            responseDoc["calibration"]["temperature_offset"] = calibration.temperatureOffset;
+            responseDoc["calibration"]["humidity_offset"] = calibration.humidityOffset;
+            
+            String responseJson;
+            serializeJson(responseDoc, responseJson);
+            webServer.send(200, "application/json", responseJson);
+        } else {
+            webServer.send(500, "application/json", 
+                "{\"error\":\"Calibration failed - could not read sensor data\"}");
+        }
+    }
+    else {
+        webServer.send(405, "application/json", 
+            "{\"error\":\"Method not allowed. Use GET or POST\"}");
     }
 }
 
@@ -306,6 +578,7 @@ void initializeWebServer() {
     webServer.on("/", handleRoot);
     webServer.on("/health", handleHealth);
     webServer.on("/sensor", handleSensorData);
+    webServer.on("/config", handleConfig);
     webServer.on("/push-now", handlePushNow);
     webServer.begin();
     Serial.println("✓ Web server started on port 80");
@@ -338,17 +611,7 @@ void processCalibration() {
     float actualTemp = readSerialFloat("Enter actual temperature (°C):");
     float actualHumidity = readSerialFloat("Enter actual humidity (%):");
     
-    SensorData current;
-    if (readSensorData(current)) {
-        calibration.temperatureOffset = current.temperature - actualTemp;
-        calibration.humidityOffset = current.humidity - actualHumidity;
-        
-        Serial.println("✓ Calibration complete:");
-        Serial.printf("  Temp offset: %.2f°C\n", calibration.temperatureOffset);
-        Serial.printf("  Humidity offset: %.2f%%\n", calibration.humidityOffset);
-    } else {
-        Serial.println("✗ Failed to read current sensor values");
-    }
+    performCalibration(actualTemp, actualHumidity);
 }
 
 void processThresholdConfiguration() {
@@ -390,6 +653,15 @@ void processSerialCommand(char command) {
             processThresholdConfiguration();
             break;
             
+        case 'R': // Reconfigure network
+            isReadingData = false;
+            setLED(false);
+            Serial.println("=== NETWORK RECONFIGURATION ===");
+            if (promptForConfiguration()) {
+                connectToWiFi();
+            }
+            break;
+            
         default:
             // Ignore unrecognized commands
             break;
@@ -423,19 +695,31 @@ void processSensorReading() {
 }
 
 void initializeSystem() {
-    Serial.println("\n=== " + String(DEVICE_NAME) + " ===");
+    // Wait for serial connection
+    waitForSerialConnection();
     
     // Initialize hardware
     initializeHardware();
     
-    // Connect to network
-    connectToWiFi();
+    // Get network configuration from user
+    bool configSuccess = false;
+    while (!configSuccess) {
+        configSuccess = promptForConfiguration();
+    }
+    
+    // Connect to WiFi
+    if (!connectToWiFi()) {
+        Serial.println("⚠️  Starting in offline mode - WiFi connection failed");
+    }
     
     // Start web server
     initializeWebServer();
     
-    Serial.println("✓ System initialized successfully");
-    Serial.println("Available Commands: G(Start), S(Stop), C(Calibrate), T(Thresholds)");
+    Serial.println("\n✓ System initialized successfully");
+    Serial.println("Available Commands: G(Start), S(Stop), C(Calibrate), T(Thresholds), R(Reconfigure Network)");
+    if (isWiFiConnected()) {
+        Serial.println("Web Interface: http://" + WiFi.localIP().toString());
+    }
 }
 
 // =============================================================================
