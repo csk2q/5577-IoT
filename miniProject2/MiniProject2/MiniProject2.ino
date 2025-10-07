@@ -42,7 +42,7 @@ const float DEFAULT_HUMIDITY_HIGH = 70.0;
 // Timing Constants
 const unsigned long SENSOR_READ_INTERVAL_MS = 1000;
 const unsigned long SERIAL_BAUD_RATE = 115200;
-const unsigned long CONFIG_TIMEOUT_MS = 120000; // 30 seconds for configuration
+const unsigned long CONFIG_TIMEOUT_MS = 120000; // 2 minutes for configuration
 
 // =============================================================================
 // Data Structures
@@ -64,11 +64,6 @@ struct ThresholdData {
     float tempHigh;
     float humidityLow;
     float humidityHigh;
-};
-
-struct ConfigRequest {
-    float actual_temperature;
-    float actual_humidity;
 };
 
 struct NetworkConfig {
@@ -116,6 +111,8 @@ String readSerialLine(unsigned long timeoutMs = 30000) {
                 if (input.length() > 0) {
                     break;
                 }
+                // If we get just CR/LF with no content, continue waiting
+                continue;
             } else {
                 input += c;
             }
@@ -133,7 +130,7 @@ bool promptForConfiguration() {
     Serial.println("NETWORK CONFIGURATION SETUP");
     Serial.println("==========================================");
     Serial.println("Please enter your network configuration:");
-    Serial.println("(You have 30 seconds for each prompt)");
+    Serial.println("(You have 2 minutes for each prompt)");
     Serial.println();
 
     // WiFi SSID
@@ -189,21 +186,22 @@ bool promptForConfiguration() {
 
 void waitForSerialConnection() {
     Serial.begin(SERIAL_BAUD_RATE);
-    delay(1000); // Give time for serial to initialize
+    delay(2000); // Give more time for serial to initialize
     
     unsigned long startTime = millis();
     Serial.println("Waiting for serial connection...");
     
     // Wait for serial connection or timeout
-    while (millis() - startTime < 5000) {
+    while (millis() - startTime < 10000) { // 10 second timeout
         if (Serial) {
             break;
         }
         delay(100);
     }
     
-    if (!Serial) {
-        Serial.begin(SERIAL_BAUD_RATE);
+    // Flush any existing data in serial buffer
+    while (Serial.available() > 0) {
+        Serial.read();
     }
 }
 
@@ -402,6 +400,18 @@ String createCalibrationJSONPayload() {
     return jsonString;
 }
 
+String createThresholdsJSONPayload() {
+    StaticJsonDocument<300> doc;
+    doc["thresholds"]["temp_low"] = thresholds.tempLow;
+    doc["thresholds"]["temp_high"] = thresholds.tempHigh;
+    doc["thresholds"]["humidity_low"] = thresholds.humidityLow;
+    doc["thresholds"]["humidity_high"] = thresholds.humidityHigh;
+    
+    String jsonString;
+    serializeJson(doc, jsonString);
+    return jsonString;
+}
+
 bool transmitSensorData(const SensorData& data) {
     if (!isWiFiConnected()) {
         Serial.println("✗ WiFi not connected - cannot transmit data");
@@ -438,30 +448,181 @@ bool transmitSensorData(const SensorData& data) {
 // =============================================================================
 
 void handleRoot() {
-    String html = R"(
-        <html>
-            <body>
-                <h1>DHT Sensor Monitor</h1>
-                <ul>
-                    <li><a href="/health">System Health</a></li>
-                    <li><a href="/sensor">Sensor Data</a></li>
-                    <li><a href="/config">Calibration Status</a></li>
-                    <li><a href="/push-now">Force Reading</a></li>
-                </ul>
-                <h2>Calibration API</h2>
-                <p>POST JSON to /config with:</p>
-                <pre>
-{
-    "actual_temperature": 25.0,
-    "actual_humidity": 50.0
-}
-                </pre>
-                <h2>Network Configuration</h2>
-                <p><strong>WiFi SSID:</strong> )" + networkConfig.ssid + R"(</p>
-                <p><strong>Server URL:</strong> )" + networkConfig.serverUrl + R"(</p>
-            </body>
-        </html>
-    )";
+    String html = "<!DOCTYPE html><html><head>";
+    html += "<title>DHT Sensor Monitor</title>";
+    html += "<style>";
+    html += "body { font-family: Arial, sans-serif; margin: 40px; }";
+    html += ".container { max-width: 800px; margin: 0 auto; }";
+    html += ".card { background: #f9f9f9; padding: 20px; margin: 20px 0; border-radius: 8px; border-left: 4px solid #007cba; }";
+    html += ".form-group { margin: 15px 0; }";
+    html += "label { display: block; margin-bottom: 5px; font-weight: bold; }";
+    html += "input[type=\"number\"], input[type=\"text\"], input[type=\"password\"] { width: 100%; max-width: 300px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }";
+    html += "button { background: #007cba; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin-right: 10px; }";
+    html += "button:hover { background: #005a87; }";
+    html += ".nav { margin: 20px 0; }";
+    html += ".nav a { display: inline-block; margin-right: 15px; padding: 10px 15px; background: #007cba; color: white; text-decoration: none; border-radius: 4px; }";
+    html += ".nav a:hover { background: #005a87; }";
+    html += ".status { padding: 10px; background: #e7f3ff; border-radius: 4px; margin: 10px 0; }";
+    html += ".tab { overflow: hidden; border: 1px solid #ccc; background-color: #f1f1f1; border-radius: 4px 4px 0 0; }";
+    html += ".tab button { background-color: inherit; float: left; border: none; outline: none; cursor: pointer; padding: 14px 16px; transition: 0.3s; }";
+    html += ".tab button:hover { background-color: #ddd; }";
+    html += ".tab button.active { background-color: #007cba; color: white; }";
+    html += ".tabcontent { display: none; padding: 20px; border: 1px solid #ccc; border-top: none; border-radius: 0 0 4px 4px; }";
+    html += ".message { padding: 10px; margin: 10px 0; border-radius: 4px; }";
+    html += ".success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }";
+    html += ".error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }";
+    html += "</style>";
+    html += "<script>";
+    html += "function openTab(evt, tabName) {";
+    html += "  var i, tabcontent, tabbuttons;";
+    html += "  tabcontent = document.getElementsByClassName('tabcontent');";
+    html += "  for (i = 0; i < tabcontent.length; i++) {";
+    html += "    tabcontent[i].style.display = 'none';";
+    html += "  }";
+    html += "  tabbuttons = document.getElementsByClassName('tabbutton');";
+    html += "  for (i = 0; i < tabbuttons.length; i++) {";
+    html += "    tabbuttons[i].className = tabbuttons[i].className.replace(' active', '');";
+    html += "  }";
+    html += "  document.getElementById(tabName).style.display = 'block';";
+    html += "  evt.currentTarget.className += ' active';";
+    html += "}";
+    html += "function showMessage(message, type) {";
+    html += "  const msgDiv = document.getElementById('message');";
+    html += "  msgDiv.innerHTML = message;";
+    html += "  msgDiv.className = 'message ' + type;";
+    html += "  msgDiv.style.display = 'block';";
+    html += "}";
+    html += "</script>";
+    html += "</head><body>";
+    html += "<div class=\"container\">";
+    html += "<h1>DHT Sensor Monitor</h1>";
+    html += "<div class=\"nav\">";
+    html += "<a href=\"/\">Home</a>";
+    html += "<a href=\"/health\">System Health</a>";
+    html += "<a href=\"/sensor\">Sensor Data</a>";
+    html += "<a href=\"/config\">Configuration</a>";
+    html += "<a href=\"/push-now\">Force Reading</a>";
+    html += "</div>";
+    html += "<div id=\"message\" class=\"message\" style=\"display:none;\"></div>";
+    html += "<div class=\"card\">";
+    html += "<h2>Current Sensor Status</h2>";
+    
+    // Add current sensor readings
+    SensorData data;
+    if (readSensorData(data)) {
+        html += "<div class='status'>";
+        html += "<strong>Temperature:</strong> " + String(data.temperature) + "°C<br>";
+        html += "<strong>Humidity:</strong> " + String(data.humidity) + "%";
+        html += "</div>";
+    } else {
+        html += "<div class='status' style='background:#ffe7e7;'>Sensor read failed</div>";
+    }
+    
+    html += "</div>";
+    html += "<div class=\"card\">";
+    html += "<h2>System Configuration</h2>";
+    html += "<div class=\"tab\">";
+    html += "<button class=\"tabbutton active\" onclick=\"openTab(event, 'Calibration')\">Calibration</button>";
+    html += "<button class=\"tabbutton\" onclick=\"openTab(event, 'Thresholds')\">Thresholds</button>";
+    html += "<button class=\"tabbutton\" onclick=\"openTab(event, 'Network')\">Network</button>";
+    html += "</div>";
+    html += "<div id=\"Calibration\" class=\"tabcontent\" style=\"display:block;\">";
+    html += "<h3>Sensor Calibration</h3>";
+    html += "<p>Enter the actual temperature and humidity values to calibrate the sensor.</p>";
+    html += "<form method=\"POST\" action=\"/config\" onsubmit=\"event.preventDefault(); submitCalibration(this);\">";
+    html += "<input type=\"hidden\" name=\"config_type\" value=\"calibration\">";
+    html += "<div class=\"form-group\">";
+    html += "<label for=\"actual_temperature\">Actual Temperature (°C):</label>";
+    html += "<input type=\"number\" step=\"0.1\" id=\"actual_temperature\" name=\"actual_temperature\" required>";
+    html += "</div>";
+    html += "<div class=\"form-group\">";
+    html += "<label for=\"actual_humidity\">Actual Humidity (%):</label>";
+    html += "<input type=\"number\" step=\"0.1\" id=\"actual_humidity\" name=\"actual_humidity\" required>";
+    html += "</div>";
+    html += "<button type=\"submit\">Calibrate Sensor</button>";
+    html += "</form>";
+    html += "<div class=\"status\" style=\"margin-top: 20px;\">";
+    html += "<h4>Current Calibration</h4>";
+    html += "<p><strong>Temperature Offset:</strong> " + String(calibration.temperatureOffset) + "°C</p>";
+    html += "<p><strong>Humidity Offset:</strong> " + String(calibration.humidityOffset) + "%</p>";
+    html += "</div>";
+    html += "</div>";
+    html += "<div id=\"Thresholds\" class=\"tabcontent\">";
+    html += "<h3>Alert Threshold Configuration</h3>";
+    html += "<p>Set the temperature and humidity thresholds for LED alerts.</p>";
+    html += "<form method=\"POST\" action=\"/config\" onsubmit=\"event.preventDefault(); submitThresholds(this);\">";
+    html += "<input type=\"hidden\" name=\"config_type\" value=\"thresholds\">";
+    html += "<div class=\"form-group\">";
+    html += "<label for=\"temp_low\">Low Temperature Threshold (°C):</label>";
+    html += "<input type=\"number\" step=\"0.1\" id=\"temp_low\" name=\"temp_low\" value=\"" + String(thresholds.tempLow) + "\" required>";
+    html += "</div>";
+    html += "<div class=\"form-group\">";
+    html += "<label for=\"temp_high\">High Temperature Threshold (°C):</label>";
+    html += "<input type=\"number\" step=\"0.1\" id=\"temp_high\" name=\"temp_high\" value=\"" + String(thresholds.tempHigh) + "\" required>";
+    html += "</div>";
+    html += "<div class=\"form-group\">";
+    html += "<label for=\"humidity_low\">Low Humidity Threshold (%):</label>";
+    html += "<input type=\"number\" step=\"0.1\" id=\"humidity_low\" name=\"humidity_low\" value=\"" + String(thresholds.humidityLow) + "\" required>";
+    html += "</div>";
+    html += "<div class=\"form-group\">";
+    html += "<label for=\"humidity_high\">High Humidity Threshold (%):</label>";
+    html += "<input type=\"number\" step=\"0.1\" id=\"humidity_high\" name=\"humidity_high\" value=\"" + String(thresholds.humidityHigh) + "\" required>";
+    html += "</div>";
+    html += "<button type=\"submit\">Save Thresholds</button>";
+    html += "</form>";
+    html += "<div class=\"status\" style=\"margin-top: 20px;\">";
+    html += "<h4>Current Threshold Behavior</h4>";
+    html += "<ul>";
+    html += "<li><strong>Below low thresholds:</strong> LED blinks</li>";
+    html += "<li><strong>Above high thresholds:</strong> LED turns ON</li>";
+    html += "<li><strong>Within normal range:</strong> LED remains OFF</li>";
+    html += "</ul>";
+    html += "</div>";
+    html += "</div>";
+    html += "<div id=\"Network\" class=\"tabcontent\">";
+    html += "<h3>Network Configuration</h3>";
+    html += "<p>Configure WiFi and server settings (requires device restart).</p>";
+    html += "<div class=\"status\">";
+    html += "<p><strong>Current WiFi SSID:</strong> " + networkConfig.ssid + "</p>";
+    html += "<p><strong>Current Server URL:</strong> " + networkConfig.serverUrl + "</p>";
+    html += "<p><em>Note: Network configuration changes require device restart to take effect.</em></p>";
+    html += "</div>";
+    html += "</div>";
+    html += "</div>";
+    html += "<script>";
+    html += "function submitCalibration(form) {";
+    html += "  const formData = new FormData(form);";
+    html += "  fetch('/config', {";
+    html += "    method: 'POST',";
+    html += "    body: formData";
+    html += "  })";
+    html += "  .then(response => response.text())";
+    html += "  .then(data => {";
+    html += "    showMessage('Calibration completed successfully!', 'success');";
+    html += "    setTimeout(() => location.reload(), 2000);";
+    html += "  })";
+    html += "  .catch(error => {";
+    html += "    showMessage('Calibration failed: ' + error, 'error');";
+    html += "  });";
+    html += "}";
+    html += "function submitThresholds(form) {";
+    html += "  const formData = new FormData(form);";
+    html += "  fetch('/config', {";
+    html += "    method: 'POST',";
+    html += "    body: formData";
+    html += "  })";
+    html += "  .then(response => response.text())";
+    html += "  .then(data => {";
+    html += "    showMessage('Thresholds updated successfully!', 'success');";
+    html += "    setTimeout(() => location.reload(), 2000);";
+    html += "  })";
+    html += "  .catch(error => {";
+    html += "    showMessage('Threshold update failed: ' + error, 'error');";
+    html += "  });";
+    html += "}";
+    html += "</script>";
+    html += "</div></body></html>";
+    
     webServer.send(200, "text/html", html);
 }
 
@@ -475,6 +636,8 @@ void handleHealth() {
     html += "<p><strong>Sensor Reading:</strong> " + String(isReadingData ? "Active" : "Inactive") + "</p>";
     html += "<p><strong>WiFi SSID:</strong> " + networkConfig.ssid + "</p>";
     html += "<p><strong>Server URL:</strong> " + networkConfig.serverUrl + "</p>";
+    html += "<p><strong>Temperature Thresholds:</strong> " + String(thresholds.tempLow) + "°C to " + String(thresholds.tempHigh) + "°C</p>";
+    html += "<p><strong>Humidity Thresholds:</strong> " + String(thresholds.humidityLow) + "% to " + String(thresholds.humidityHigh) + "%</p>";
     html += "</body></html>";
     
     webServer.send(200, "text/html", html);
@@ -492,73 +655,76 @@ void handleSensorData() {
 
 void handleConfig() {
     if (webServer.method() == HTTP_GET) {
-        // Return current calibration status
-        String json = createCalibrationJSONPayload();
-        webServer.send(200, "application/json", json);
+        handleRoot(); // Redirect to main page with configuration tabs
     }
     else if (webServer.method() == HTTP_POST) {
-        // Handle calibration via JSON
-        String contentType = webServer.header("Content-Type");
+        String configType = webServer.arg("config_type");
         
-        if (contentType != "application/json") {
-            webServer.send(400, "application/json", 
-                "{\"error\":\"Content-Type must be application/json\"}");
-            return;
-        }
-        
-        String postBody = webServer.arg("plain");
-        
-        // Parse JSON
-        StaticJsonDocument<200> doc;
-        DeserializationError error = deserializeJson(doc, postBody);
-        
-        if (error) {
-            webServer.send(400, "application/json", 
-                "{\"error\":\"Invalid JSON: " + String(error.c_str()) + "\"}");
-            return;
-        }
-        
-        // Validate required fields
-        if (!doc.containsKey("actual_temperature") || !doc.containsKey("actual_humidity")) {
-            webServer.send(400, "application/json", 
-                "{\"error\":\"Missing required fields: actual_temperature and actual_humidity\"}");
-            return;
-        }
-        
-        float actualTemp = doc["actual_temperature"];
-        float actualHumidity = doc["actual_humidity"];
-        
-        // Validate numeric values
-        if (isnan(actualTemp) || isnan(actualHumidity)) {
-            webServer.send(400, "application/json", 
-                "{\"error\":\"Invalid numeric values provided\"}");
-            return;
-        }
-        
-        Serial.println("📡 Received calibration request via REST API");
-        Serial.printf("  Actual Temperature: %.1f°C\n", actualTemp);
-        Serial.printf("  Actual Humidity: %.1f%%\n", actualHumidity);
-        
-        // Perform calibration
-        if (performCalibration(actualTemp, actualHumidity)) {
-            // Return success response with new calibration data
-            StaticJsonDocument<300> responseDoc;
-            responseDoc["status"] = "success";
-            responseDoc["message"] = "Calibration completed successfully";
-            responseDoc["calibration"]["temperature_offset"] = calibration.temperatureOffset;
-            responseDoc["calibration"]["humidity_offset"] = calibration.humidityOffset;
+        if (configType == "calibration") {
+            // Handle calibration form submission
+            String actualTempStr = webServer.arg("actual_temperature");
+            String actualHumidityStr = webServer.arg("actual_humidity");
             
-            String responseJson;
-            serializeJson(responseDoc, responseJson);
-            webServer.send(200, "application/json", responseJson);
-        } else {
-            webServer.send(500, "application/json", 
-                "{\"error\":\"Calibration failed - could not read sensor data\"}");
+            if (actualTempStr.length() == 0 || actualHumidityStr.length() == 0) {
+                webServer.send(400, "text/plain", "Error: Missing required fields");
+                return;
+            }
+            
+            float actualTemp = actualTempStr.toFloat();
+            float actualHumidity = actualHumidityStr.toFloat();
+            
+            Serial.println("📡 Received calibration request via web form");
+            Serial.printf("  Actual Temperature: %.1f°C\n", actualTemp);
+            Serial.printf("  Actual Humidity: %.1f%%\n", actualHumidity);
+            
+            if (performCalibration(actualTemp, actualHumidity)) {
+                webServer.send(200, "text/plain", "Calibration completed successfully");
+            } else {
+                webServer.send(500, "text/plain", "Calibration failed - could not read sensor data");
+            }
+        }
+        else if (configType == "thresholds") {
+            // Handle thresholds form submission
+            String tempLowStr = webServer.arg("temp_low");
+            String tempHighStr = webServer.arg("temp_high");
+            String humidityLowStr = webServer.arg("humidity_low");
+            String humidityHighStr = webServer.arg("humidity_high");
+            
+            // Validate and convert values
+            float tempLow = tempLowStr.toFloat();
+            float tempHigh = tempHighStr.toFloat();
+            float humidityLow = humidityLowStr.toFloat();
+            float humidityHigh = humidityHighStr.toFloat();
+            
+            // Basic validation
+            if (tempLow >= tempHigh) {
+                webServer.send(400, "text/plain", "Error: Low temperature threshold must be less than high threshold");
+                return;
+            }
+            
+            if (humidityLow >= humidityHigh) {
+                webServer.send(400, "text/plain", "Error: Low humidity threshold must be less than high threshold");
+                return;
+            }
+            
+            // Update thresholds
+            thresholds.tempLow = tempLow;
+            thresholds.tempHigh = tempHigh;
+            thresholds.humidityLow = humidityLow;
+            thresholds.humidityHigh = humidityHigh;
+            
+            Serial.println("✓ Thresholds updated via web interface:");
+            Serial.printf("  Temperature: %.1f°C to %.1f°C\n", thresholds.tempLow, thresholds.tempHigh);
+            Serial.printf("  Humidity: %.1f%% to %.1f%%\n", thresholds.humidityLow, thresholds.humidityHigh);
+            
+            webServer.send(200, "text/plain", "Thresholds updated successfully");
+        }
+        else {
+            webServer.send(400, "text/plain", "Error: Unknown configuration type");
         }
     }
     else {
-        webServer.send(405, "application/json", 
-            "{\"error\":\"Method not allowed. Use GET or POST\"}");
+        webServer.send(405, "text/plain", "Method Not Allowed");
     }
 }
 
