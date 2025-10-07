@@ -42,7 +42,7 @@ const float DEFAULT_HUMIDITY_HIGH = 70.0;
 // Timing Constants
 const unsigned long SENSOR_READ_INTERVAL_MS = 1000;
 const unsigned long SERIAL_BAUD_RATE = 115200;
-const unsigned long CONFIG_TIMEOUT_MS = 30000; // 30 seconds for configuration
+const unsigned long CONFIG_TIMEOUT_MS = 120000; // 30 seconds for configuration
 
 // =============================================================================
 // Data Structures
