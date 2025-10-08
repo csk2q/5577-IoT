@@ -647,7 +647,8 @@ void handleSensorData() {
     SensorData data;
     if (readSensorData(data)) {
         String json = createJSONPayload(data);
-        webServer.send(200, "application/json", json);
+        String base64 = encryptData(json);
+        webServer.send(200, "application/json", base64);
     } else {
         webServer.send(500, "application/json", "{\"error\":\"Sensor read failed\"}");
     }
