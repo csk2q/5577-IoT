@@ -13,6 +13,10 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 
+// Include ESP-IDF GAP header for esp_ble_gap_read_rssi and GAP events
+#include "esp_gap_ble_api.h"
+#include "esp_bt.h"
+
 // =============================================================================
 // Configuration
 // =============================================================================
@@ -44,6 +48,7 @@ struct Thresholds {
 
 Thresholds thresholds;
 
+
 // =============================================================================
 // BLE Configuration
 // =============================================================================
@@ -55,13 +60,28 @@ BLECharacteristic *pBatteryCharacteristic = nullptr;   // New battery characteri
 uint8_t batteryLevel = 100;                            // Battery starts full
 unsigned long lastBatteryUpdate = 0;                   // Timer for battery drain
 
+BLECharacteristic *pDistanceCharacteristic = nullptr;
+static unsigned long lastDistanceUpdate = 0;
+static unsigned long lastDistanceRead = 0;
+const unsigned long distanceUpdateInterval = 5000; // 5 seconds
+const unsigned long distanceReadInterval = 500; // 0.5 seconds
+float lastRssi = 9999999;
+
 bool deviceConnected = false;
+static esp_bd_addr_t deviceAddr; // 6-byte address
+static bool haveAddress = false;
 
 #define SERVICE_UUID "181A"
 #define TEMPERATURE_UUID "2A6E"
 #define HUMIDITY_UUID "2A6F"
 #define BATTERY_SERVICE_UUID "180F"
 #define BATTERY_LEVEL_UUID "2A19"
+
+#define DISTANCE_SERVICE_UUID "12345678-1234-5678-1234-56789abcdef0"
+#define DISTANCE_UUID    "12345678-1234-5678-1234-56789abcdef1"
+
+// Forward declare handler (must match typedef gap_event_handler)
+void gapEventHandler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param);
 
 // =============================================================================
 // Utility Functions
@@ -193,7 +213,7 @@ void checkSerialCommands() {
 }
 
 // =============================================================================
-// BLE Initialization
+// BLE Initialization & Callbacks
 // =============================================================================
 void startAdvertise(){
   BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
@@ -206,14 +226,28 @@ void startAdvertise(){
 }
 
 class ServerCallbacks: public BLEServerCallbacks{
-  void onConnect(BLEServer *pServer){
+
+  void onConnect(BLEServer *pServer, esp_ble_gatts_cb_param_t *param) override {
+    if (param && param->connect.remote_bda) {
+      memcpy(deviceAddr, param->connect.remote_bda, sizeof(deviceAddr));
+      haveAddress = true;
+    } else {
+      haveAddress = false;
+    }
     deviceConnected = true;
-    Serial.println("Device connected!");
+
+    // Print friendly MAC address
+    char addrStr[18];
+    sprintf(addrStr, "%02X:%02X:%02X:%02X:%02X:%02X",
+            deviceAddr[0], deviceAddr[1], deviceAddr[2],
+            deviceAddr[3], deviceAddr[4], deviceAddr[5]);
+    Serial.printf("Client device connected! MAC: %s\n", addrStr);
   }
 
   void onDisconnect(BLEServer *pServer){
     deviceConnected = false;
-    Serial.println("Device disconnected!");
+    haveAddress = false;
+    Serial.println("Client device disconnected!");
     startAdvertise();
   }
 };
@@ -237,9 +271,45 @@ void updateBatteryLevel() {
     }
 }
 
+void updateDistanceService(){
+    if (deviceConnected && haveAddress) {
+        unsigned long now = millis();
+
+        if (now - lastDistanceRead >= )
+
+        if (now - lastDistanceUpdate >= distanceUpdateInterval) {
+        lastDistanceUpdate = now;
+
+        // Request RSSI read for the connected peer.
+        // esp_ble_gap_read_rssi expects esp_bd_addr_t (uint8_t[6])
+        esp_err_t err = esp_ble_gap_read_rssi(deviceAddr);
+        if (err != ESP_OK) {
+            Serial.printf("esp_ble_gap_read_rssi() returned 0x%04X\n", err);
+        } else {
+            // Serial.println("Requested RSSI read (esp_ble_gap_read_rssi). Waiting for callback...");
+            // The RSSI value will arrive asynchronously in my_gap_event_handler
+
+            if (lastRssi < 9999999)
+            {
+                pDistanceCharacteristic->setValue("RSSI: "+ String(lastRssi) +" dBm");
+                pDistanceCharacteristic->notify();
+            }
+        }
+    }
+  }
+}
+
 void initializeBLE() {
     String bleDeviceName = "Team 2";
     BLEDevice::init(bleDeviceName.c_str());
+
+    // Register the GAP event callback to receive READ_RSSI_COMPLETE and other events
+    esp_err_t rc = esp_ble_gap_register_callback(gapEventHandler);
+    if (rc != ESP_OK) {
+        Serial.printf("ERROR: esp_ble_gap_register_callback returned 0x%04X\n", rc);
+    } else {
+        Serial.println("Registered GAP callback");
+    }
 
     pServer = BLEDevice::createServer();
     pServer->setCallbacks(new ServerCallbacks());
@@ -272,10 +342,21 @@ void initializeBLE() {
     pBatteryCharacteristic->setValue(&batteryLevel, 1);
     pBatteryService->start();
 
+    // Distance service
+    BLEService *pBLEService = pServer->createService(DISTANCE_SERVICE_UUID);
+    pDistanceCharacteristic = pBLEService->createCharacteristic(
+        DISTANCE_UUID,
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+    );
+    pDistanceCharacteristic->addDescriptor(new BLE2902());
+    pDistanceCharacteristic->setValue("RSSI: ??? dBm");
+    pBLEService->start();
+
     // Advertising setup
     BLEAdvertising *pAdvertising = BLEDevice::getAdvertising();
     pAdvertising->addServiceUUID(SERVICE_UUID);
     pAdvertising->addServiceUUID(BATTERY_SERVICE_UUID); // 🔹 Added
+    pAdvertising->addServiceUUID(DISTANCE_SERVICE_UUID);
     pAdvertising->setScanResponse(true);
     pAdvertising->setMinPreferred(0x06);
     pAdvertising->setMinPreferred(0x12);
@@ -284,6 +365,42 @@ void initializeBLE() {
     Serial.println("✅ BLE started successfully");
     Serial.println("📡 Services: 0x181A (Env Sensing), 0x180F (Battery)");
     Serial.println("📡 Characteristics: 0x2A6E (Temp), 0x2A6F (Humid), 0x2A19 (Battery)");
+}
+
+// GAP event handler - receives the READ_RSSI_COMPLETE event with RSSI data
+void gapEventHandler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param) {
+  switch (event) {
+    case ESP_GAP_BLE_READ_RSSI_COMPLETE_EVT: {
+      // param->read_rssi_cmpl should be available; use a reference for clarity
+      auto &rc = param->read_rssi_cmpl;
+      if (rc.status == ESP_BT_STATUS_SUCCESS) {
+        int rssi = rc.rssi; // measured RSSI in dBm
+        uint8_t *bda = rc.remote_addr; // remote address
+        char addrStr[18];
+        sprintf(addrStr, "%02X:%02X:%02X:%02X:%02X:%02X",
+                bda[0], bda[1], bda[2], bda[3], bda[4], bda[5]);
+        Serial.printf("GAP READ_RSSI_COMPLETE from %s -> RSSI: %d dBm\n", addrStr, rssi);
+
+        if (pDistanceCharacteristic != nullptr && deviceConnected && haveAddress) {
+            lastRssi = rssi;
+        }
+
+      } else {
+        Serial.printf("GAP READ_RSSI_COMPLETE status error: 0x%02X\n", rc.status);
+      }
+      break;
+    }
+
+    case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
+      if (param->adv_start_cmpl.status == ESP_BT_STATUS_SUCCESS) {
+        Serial.println("Advertising started (GAP event).");
+      }
+      break;
+
+    default:
+      // you can debug other events here if desired
+      break;
+  }
 }
 
 // =============================================================================
@@ -343,4 +460,5 @@ void loop() {
     checkSerialCommands();
     if (isReadingData) processSensorReading();
     updateBatteryLevel();
+    updateDistanceService();
 }
