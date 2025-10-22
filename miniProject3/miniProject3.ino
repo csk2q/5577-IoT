@@ -48,7 +48,6 @@ struct Thresholds {
 
 Thresholds thresholds;
 
-
 // =============================================================================
 // BLE Configuration
 // =============================================================================
@@ -60,12 +59,21 @@ BLECharacteristic *pBatteryCharacteristic = nullptr;   // New battery characteri
 uint8_t batteryLevel = 100;                            // Battery starts full
 unsigned long lastBatteryUpdate = 0;                   // Timer for battery drain
 
+BLECharacteristic *pTxPowerCharacteristic = nullptr; 
+float esp32TxPowerLevel = 0;
+
 BLECharacteristic *pDistanceCharacteristic = nullptr;
 static unsigned long lastDistanceUpdate = 0;
 static unsigned long lastDistanceRead = 0;
 const unsigned long distanceUpdateInterval = 5000; // 5 seconds
 const unsigned long distanceReadInterval = 500; // 0.5 seconds
+bool distanceCalibrated = false;
 float lastRssi = 9999999;
+float measuredClientTxPower = 9999999;
+float oneMeterRssi = 9999999;
+float pathLossExponent = 3.5;
+const float dClose = 0.02; // meters (approx distance when devices touch)
+
 
 bool deviceConnected = false;
 static esp_bd_addr_t deviceAddr; // 6-byte address
@@ -76,6 +84,8 @@ static bool haveAddress = false;
 #define HUMIDITY_UUID "2A6F"
 #define BATTERY_SERVICE_UUID "180F"
 #define BATTERY_LEVEL_UUID "2A19"
+#define TX_POWER_SERVICE_UUID "1804"
+#define TX_POWER_LEVEL_UUID "2A07"
 
 #define DISTANCE_SERVICE_UUID "12345678-1234-5678-1234-56789abcdef0"
 #define DISTANCE_UUID    "12345678-1234-5678-1234-56789abcdef1"
@@ -156,9 +166,61 @@ void transmitSensorData(const SensorData& data) {
 // Calibration and Threshold Configuration
 // =============================================================================
 void processCalibration() {
+    // Clear console
+    clearSerialBuffer();
     Serial.println("=== SENSOR CALIBRATION ===");
-    Serial.println("Hold sensors steady...");
-    delay(2000);
+    Serial.println("Place device on ESP32 to record baseline transmit power.");
+    Serial.println("Press ENTER when ready.");
+    while (Serial.read() != '\n') {}
+    // Serial.readStringUntil('\n');
+    Serial.print("Takeing samples...");
+
+    const int sampleCount = 10;
+    float rssiSamples = 0;
+    for (size_t i = 0; i < sampleCount; i++)
+    {
+        requestRssiRead();
+        delay(500);
+        if(lastRssi < 9999999)
+            rssiSamples += lastRssi;
+        else
+            i--;
+        Serial.print(".");
+    }
+    Serial.println();
+    measuredClientTxPower = rssiSamples / sampleCount;
+
+    Serial.println("Baseline TX measured to be: " + String(measuredClientTxPower) + " dbm");
+    delay(100);
+    Serial.println("Place device on 1 meter from ESP32.");
+    Serial.println("Press ENTER when ready.");
+    clearSerialBuffer();
+    // Serial.flush();
+    // clearSerialBuffer();
+    // while(Serial.available() > 0) Serial.read();
+    Serial.readStringUntil('\n');
+    Serial.print("Takeing samples");
+
+    rssiSamples = 0;
+    for (size_t i = 0; i < sampleCount; i++)
+    {
+        requestRssiRead();
+        delay(500);
+        if(lastRssi < 9999999)
+            rssiSamples += lastRssi;
+        else
+         i--;
+        Serial.print(".");
+    }
+    oneMeterRssi = rssiSamples / sampleCount;
+    Serial.println();
+    Serial.println("One meter TX measured to be: " + String(oneMeterRssi) + " dbm");
+    // Serial.println("Enter path-loss exponent (environment dependent; outside n≈2, indoors 3-4).");
+    Serial.flush();
+    pathLossExponent = readSerialFloat("Enter path-loss exponent (environment dependent; outside n≈2, indoors 3-4).");
+    Serial.println("Path-loss exponent set to " + String(pathLossExponent));
+
+    distanceCalibrated = true;
     Serial.println("✓ Calibration complete");
 }
 
@@ -242,6 +304,11 @@ class ServerCallbacks: public BLEServerCallbacks{
             deviceAddr[0], deviceAddr[1], deviceAddr[2],
             deviceAddr[3], deviceAddr[4], deviceAddr[5]);
     Serial.printf("Client device connected! MAC: %s\n", addrStr);
+
+    // Get the current TX‑power
+    esp32TxPowerLevel = esp_ble_tx_power_get(ESP_BLE_PWR_TYPE_DEFAULT);
+    pTxPowerCharacteristic->setValue(String(esp32TxPowerLevel) + " dbm");
+    pTxPowerCharacteristic->notify();
   }
 
   void onDisconnect(BLEServer *pServer){
@@ -271,29 +338,53 @@ void updateBatteryLevel() {
     }
 }
 
+void requestRssiRead()
+{
+    // Request RSSI read for the connected peer.
+    // The RSSI value will arrive asynchronously in gapEventHandler
+    // esp_ble_gap_read_rssi expects esp_bd_addr_t (uint8_t[6])
+    esp_err_t err = esp_ble_gap_read_rssi(deviceAddr);
+    if (err != ESP_OK) {
+        Serial.printf("esp_ble_gap_read_rssi() returned 0x%04X\n", err);
+        return;
+    }
+}
+
 void updateDistanceService(){
     if (deviceConnected && haveAddress) {
         unsigned long now = millis();
 
-        if (now - lastDistanceRead >= )
+        if (now - lastDistanceRead >= distanceReadInterval) {
+            lastDistanceRead = now;
+            requestRssiRead();
+        }
 
         if (now - lastDistanceUpdate >= distanceUpdateInterval) {
         lastDistanceUpdate = now;
 
-        // Request RSSI read for the connected peer.
-        // esp_ble_gap_read_rssi expects esp_bd_addr_t (uint8_t[6])
-        esp_err_t err = esp_ble_gap_read_rssi(deviceAddr);
-        if (err != ESP_OK) {
-            Serial.printf("esp_ble_gap_read_rssi() returned 0x%04X\n", err);
-        } else {
-            // Serial.println("Requested RSSI read (esp_ble_gap_read_rssi). Waiting for callback...");
-            // The RSSI value will arrive asynchronously in my_gap_event_handler
-
-            if (lastRssi < 9999999)
+        if (lastRssi < 9999999)
+        {
+            // Calculate estimated distance using path loss model
+            float distanceEstimate = 0.0;
+            if (distanceCalibrated)
             {
-                pDistanceCharacteristic->setValue("RSSI: "+ String(lastRssi) +" dBm");
-                pDistanceCharacteristic->notify();
+                float n = (oneMeterRssi - measuredClientTxPower) / (10.0 * log10(dClose));
+
+                // Estimate distance for current RSSI reading
+                distanceEstimate = pow(10.0, (oneMeterRssi - lastRssi) / (10.0 * n));
             }
+
+            char distStr[64];
+            snprintf(distStr, sizeof(distStr), "RSSI: %.1f dBm | distance≈%.2fm", lastRssi, distanceEstimate);
+
+            pDistanceCharacteristic->setValue(distStr);
+            pDistanceCharacteristic->notify();
+
+            // Update Tx Power Level characteristic too
+            // pTxPowerCharacteristic->setValue((int8_t)esp32TxPowerLevel);
+            // pTxPowerCharacteristic->notify();
+
+            // Serial.printf("📶 Distance update → %s\n", distStr);
         }
     }
   }
@@ -308,7 +399,7 @@ void initializeBLE() {
     if (rc != ESP_OK) {
         Serial.printf("ERROR: esp_ble_gap_register_callback returned 0x%04X\n", rc);
     } else {
-        Serial.println("Registered GAP callback");
+        // Serial.println("Registered GAP callback");
     }
 
     pServer = BLEDevice::createServer();
@@ -342,6 +433,17 @@ void initializeBLE() {
     pBatteryCharacteristic->setValue(&batteryLevel, 1);
     pBatteryService->start();
 
+    // Tx Power service
+    BLEService *pTxPowerService = pServer->createService(TX_POWER_SERVICE_UUID);
+
+    pTxPowerCharacteristic = pTxPowerService->createCharacteristic(
+        TX_POWER_LEVEL_UUID,
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+    );
+    pTxPowerCharacteristic->addDescriptor(new BLE2902());
+    pTxPowerCharacteristic->setValue("??? dbm");
+    pTxPowerService->start();
+
     // Distance service
     BLEService *pBLEService = pServer->createService(DISTANCE_SERVICE_UUID);
     pDistanceCharacteristic = pBLEService->createCharacteristic(
@@ -349,7 +451,7 @@ void initializeBLE() {
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
     );
     pDistanceCharacteristic->addDescriptor(new BLE2902());
-    pDistanceCharacteristic->setValue("RSSI: ??? dBm");
+    pDistanceCharacteristic->setValue("???");
     pBLEService->start();
 
     // Advertising setup
@@ -379,7 +481,7 @@ void gapEventHandler(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param
         char addrStr[18];
         sprintf(addrStr, "%02X:%02X:%02X:%02X:%02X:%02X",
                 bda[0], bda[1], bda[2], bda[3], bda[4], bda[5]);
-        Serial.printf("GAP READ_RSSI_COMPLETE from %s -> RSSI: %d dBm\n", addrStr, rssi);
+        // Serial.printf("GAP READ_RSSI_COMPLETE from %s -> RSSI: %d dBm\n", addrStr, rssi);
 
         if (pDistanceCharacteristic != nullptr && deviceConnected && haveAddress) {
             lastRssi = rssi;
@@ -438,6 +540,7 @@ void initializeHardware() {
 }
 
 void initializeSystem() {
+    Serial.setTimeout(60000);
     waitForSerialConnection();
     initializeHardware();
     Serial.println("\n=== ESP32 DHT Sensor Monitor (BLE Only) ===");
