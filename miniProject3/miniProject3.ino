@@ -216,9 +216,9 @@ void processCalibration() {
     Serial.println();
     Serial.println("One meter TX measured to be: " + String(oneMeterRssi) + " dbm");
     // Serial.println("Enter path-loss exponent (environment dependent; outside n≈2, indoors 3-4).");
-    Serial.flush();
-    pathLossExponent = readSerialFloat("Enter path-loss exponent (environment dependent; outside n≈2, indoors 3-4).");
-    Serial.println("Path-loss exponent set to " + String(pathLossExponent));
+    // Serial.flush();
+    // pathLossExponent = readSerialFloat("Enter path-loss exponent (environment dependent; outside n≈2, indoors 3-4).");
+    // Serial.println("Path-loss exponent set to " + String(pathLossExponent));
 
     distanceCalibrated = true;
     Serial.println("✓ Calibration complete");
