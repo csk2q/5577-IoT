@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using BlazorCloud.Components;
 using BlazorCloud.Components.Account;
 using BlazorCloud.Data;
+using BlazorCloud.Filters;
 
 namespace BlazorCloud;
 
@@ -21,6 +22,10 @@ public class Program
         builder.Services.AddScoped<IdentityUserAccessor>();
         builder.Services.AddScoped<IdentityRedirectManager>();
         builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
+
+        builder.Services.AddControllers();
+        
+        builder.Services.AddScoped<DecryptRequestFilter>();
 
         builder.Services.AddAuthentication(options =>
             {
@@ -59,6 +64,9 @@ public class Program
         app.UseHttpsRedirection();
 
         app.UseAntiforgery();
+        
+        // After routing but before endpoints
+        app.UseMiddleware<Middleware.RequestDecrypter>();
 
         app.MapStaticAssets();
         app.MapRazorComponents<App>()
@@ -66,6 +74,8 @@ public class Program
 
         // Add additional endpoints required by the Identity /Account Razor components.
         app.MapAdditionalIdentityEndpoints();
+        
+        app.MapControllers();
 
         app.Run();
     }

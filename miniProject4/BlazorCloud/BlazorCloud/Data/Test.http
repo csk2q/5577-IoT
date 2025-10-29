@@ -1,0 +1,9 @@
+﻿POST http://localhost:5250/post-data
+Content-Type: application/json
+
+{
+  "team_number": 2,
+  "temperature": 25.5,
+  "humidity": 60,
+  "timestamp": "2025-10-29T12:00:00Z"
+}

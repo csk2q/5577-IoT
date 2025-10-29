@@ -1,16 +1,16 @@
 using System.Security.Claims;
 using System.Text.Json;
+using BlazorCloud.Components.Account.Pages;
+using BlazorCloud.Components.Account.Pages.Manage;
+using BlazorCloud.Data;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Primitives;
-using BlazorCloud.Components.Account.Pages;
-using BlazorCloud.Components.Account.Pages.Manage;
-using BlazorCloud.Data;
 
-namespace Microsoft.AspNetCore.Routing;
+namespace BlazorCloud.Components.Account;
 
 internal static class IdentityComponentsEndpointRouteBuilderExtensions
 {
