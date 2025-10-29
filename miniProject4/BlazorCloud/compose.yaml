@@ -1,0 +1,7 @@
+﻿services:
+  blazorcloud:
+    image: blazorcloud
+    build:
+      context: .
+      dockerfile: BlazorCloud/Dockerfile
+
