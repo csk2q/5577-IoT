@@ -4,6 +4,8 @@ namespace BlazorCloud.Data.DataTransferObjects;
 
 public class UploadedData
 {
+    //{"team_number":2,"temperature":22.2,"humidity":44,"timestamp":1111627}
+    
     [JsonPropertyName("team_number")]
     public int TeamNumber { get; set; }
 
@@ -14,5 +16,6 @@ public class UploadedData
     public float Humidity { get; set; }
 
     [JsonPropertyName("timestamp")]
-    public DateTime Timestamp { get; set; }
+    public ulong Timestamp { get; set; }
 }
+
