@@ -1,9 +1,18 @@
-﻿namespace BlazorCloud.Data.DataTransferObjects;
+﻿using System.Text.Json.Serialization;
+
+namespace BlazorCloud.Data.DataTransferObjects;
 
 public class UploadedData
 {
-    public int team_number;
-    public float temperature;
-    public float humidity;
-    public DateTime timestamp; // Note: this might be the wrong data type.
+    [JsonPropertyName("team_number")]
+    public int TeamNumber { get; set; }
+
+    [JsonPropertyName("temperature")]
+    public float Temperature { get; set; }
+
+    [JsonPropertyName("humidity")]
+    public float Humidity { get; set; }
+
+    [JsonPropertyName("timestamp")]
+    public DateTime Timestamp { get; set; }
 }

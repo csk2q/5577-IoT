@@ -1,9 +1,12 @@
+using System.Text;
+using BlazorCloud.API;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using BlazorCloud.Components;
 using BlazorCloud.Components.Account;
 using BlazorCloud.Data;
+using BlazorCloud.Middleware;
 
 namespace BlazorCloud;
 
@@ -62,6 +65,8 @@ public class Program
         app.UseHttpsRedirection();
 
         app.UseAntiforgery();
+        
+        app.UseMiddleware<DecryptorMiddleware>(); 
 
         app.MapStaticAssets();
         app.MapRazorComponents<App>()
@@ -71,6 +76,19 @@ public class Program
         app.MapAdditionalIdentityEndpoints();
         
         app.MapControllers();
+
+        /*app.MapPost("post-data-test", async context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status200OK;
+            context.Response.ContentType = "text/plain";
+            await context.Response.WriteAsync("Hello World!\n" + context.Request.Path);
+
+        });*/
+        app.MapPost("post-data", PostData.Upload);
+        app.MapPost("test", async httpContext =>
+        {
+            Console.WriteLine("Payload=" + await new StreamReader(httpContext.Request.Body, Encoding.UTF8).ReadToEndAsync());
+        });
 
         app.Run();
     }
