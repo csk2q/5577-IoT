@@ -246,5 +246,3 @@ http-client.private.env.json
 .idea/
 build/
 .vscode/
-*.db-shm
-*.db-wal
