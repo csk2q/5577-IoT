@@ -15,9 +15,11 @@ public class EnvironmentData
     public int TeamNumber { get; set; }
 
     [Required] // Makes the temperature a required field
+    [EncryptedFloat]
     public float Temperature { get; set; }
 
     [Required] // Makes the humidity a required field
+    [EncryptedFloat]
     public float Humidity { get; set; }
 
     [Required] // Makes the timestamp a required field

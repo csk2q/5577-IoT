@@ -10,10 +10,30 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(modelBuilder);
         // Configure any relationships, indexes, etc. here.
         // modelBuilder.Entity<EnvironmentData>()
         //     .HasIndex(p => p.Email)
         //     .IsUnique();
+
+        var floatConverter = new EncryptedFloatConverter();
+        var stringConverter = new EncryptedStringConverter();
+
+        foreach (var entity in modelBuilder.Model.GetEntityTypes())
+        foreach (var property in entity.GetProperties())
+        {
+            var propertyInfo = property.PropertyInfo;
+            if (propertyInfo is null)
+                continue;
+
+            // Apply Float converter if marked – it will store the value as binary in the DB
+            if (propertyInfo.IsDefined(typeof(EncryptedFloatAttribute), inherit: false))
+                property.SetValueConverter(floatConverter);
+            // Apply String converter if marked – it will store the value as binary in the DB
+            else if (propertyInfo.IsDefined(typeof(EncryptedStringAttribute), inherit: false))
+                property.SetValueConverter(stringConverter);
+        }
+
+
+        base.OnModelCreating(modelBuilder);
     }
 }

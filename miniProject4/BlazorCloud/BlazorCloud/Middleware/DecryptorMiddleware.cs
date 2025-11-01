@@ -52,9 +52,9 @@ public class DecryptorMiddleware(RequestDelegate next)
         string plainText;
         try
         {
-            plainText = Helpers.AesDecryptor.DecryptAes(base64Payload);
+            plainText = Helpers.AesEncryptionHelper.DecryptStringFromBase64(base64Payload);
             // plainText = Helpers.AesCbcHelper.DecryptData(base64Payload);
-            // plainText = Helpers.AesHelper.Decrypt(encryptedBytes);
+            // plainText = Helpers.AesEncryptionHelper.Decrypt(encryptedBytes);
         }
         catch (Exception ex)
         {
