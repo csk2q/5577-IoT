@@ -7,3 +7,32 @@ Content-Type: application/json
   "humidity": 60,
   "timestamp": "2025-10-29T12:00:00Z"
 }
+
+###
+
+# Request without encription
+POST http://localhost:5250/post-data
+Content-Type: application/json
+
+{
+"team_number": 2,
+"temperature": 25.5,
+"humidity": 60,
+"timestamp": "2025-10-29T12:00:00Z"
+}
+
+###
+# Request with encription
+POST http://localhost:5250/post-data
+Content-Type: application/json
+X-Encrypted: true
+
+UOk19bdiFgyzwIeJuCH42/eKdfL/JTmkX7nS3jmIdADYpuwCxPK1zuGhFZGrBI7/kufVbSYe3INY+pXmSrZllBZcTvBKh4jz4Kvv1lG95s4=
+
+###
+# Request with encription
+POST http://localhost:5250/test
+Content-Type: application/json
+X-Encrypted: true
+
+UOk19bdiFgyzwIeJuCH42/eKdfL/JTmkX7nS3jmIdADYpuwCxPK1zuGhFZGrBI7/kufVbSYe3INY+pXmSrZllBZcTvBKh4jz4Kvv1lG95s4=

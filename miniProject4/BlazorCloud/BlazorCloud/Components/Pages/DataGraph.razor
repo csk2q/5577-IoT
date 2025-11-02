@@ -1,0 +1,122 @@
+﻿@page "/DataGraph"
+@using BlazorCloud.Data
+@using BlazorCloud.Data.Entities
+@using Microsoft.EntityFrameworkCore
+
+@rendermode InteractiveServer
+
+<h3>DataGraph</h3>
+
+<b>The last five minutes of Temperature data in Celsius</b>
+<MudPaper Class="doc-section-component-container">
+    @* Width="@_width" *@
+    <MudTimeSeriesChart ChartSeries="@_series"
+                        @bind-SelectedIndex="_index"
+                        Width="100%"
+                        Height="@_height"
+                        ChartOptions="@_options"
+                        AxisChartOptions="@_axisChartOptions"
+                        CanHideSeries="false"
+                        TimeLabelSpacing="TimeSpan.FromMinutes(5)"
+                        TimeLabelSpacingRounding="true"
+                        TimeLabelSpacingRoundingPadSeries="false"
+                        DataMarkerTooltipTimeLabelFormat="yyyy MMM dd HH:mm:ss"/>
+</MudPaper>
+
+<span>Last five received data:</span>
+<div id="tempDataContainer">
+@foreach (var data in dbContext.EnvironmentData.AsNoTracking().OrderByDescending(e => e.Id).Take(5))
+{
+    <span>@data.CreatedAt - T:@data.Temperature H:@data.Humidity</span><br>
+}
+</div>
+
+@inject ApplicationDbContext dbContext;
+
+@code {
+    private int _index = -1; //default value cannot be 0 -> first selectedindex is 0.
+    private ChartOptions _options = new ChartOptions
+        {
+            YAxisLines = true,
+            YAxisTicks = 50,
+            MaxNumYAxisTicks = 10,
+            YAxisRequireZeroPoint = true,
+            XAxisLines = true,
+            LineStrokeWidth = 1,
+        };
+
+    private AxisChartOptions _axisChartOptions = new()
+    {
+        MatchBoundsToSize = true,
+    };
+
+    private TimeSeriesChartSeries tempChart = new();
+
+    private List<TimeSeriesChartSeries> _series = new();
+
+    private string _width = "650px";
+    private string _height = "350px";
+    
+    // Timer
+    
+    List<TimeSeriesChartSeries.TimeValue> tempatureData = [];
+
+    private void updateTempData()
+    {
+        tempatureData = [];
+        var fiveMinutesAgo = DateTime.Now - TimeSpan.FromMinutes(5.5);
+        
+        tempatureData = dbContext.EnvironmentData
+            .AsNoTracking()
+            .OrderByDescending(e => e.Id)
+            .Where(e => e.CreatedAt >= fiveMinutesAgo)
+            .Take((int)Math.Ceiling(60*5.1)) //Just over five minutes of data at a rate of one update per second.
+            .Select(e => new { e.CreatedAt, e.Temperature })
+            .ToList() // Required for temperature to be non-zero. Likely needed because of SQL reasons.
+            .Select(r => new TimeSeriesChartSeries.TimeValue(r.CreatedAt, r.Temperature))
+            .ToList();
+        
+        // foreach (var environmentData in dbContext.EnvironmentData.AsNoTracking().OrderByDescending(e => e.Id)
+        //              .Where(e => e.CreatedAt >= fiveMinutesAgo))
+        // {
+        //     tempatureData.Add(new TimeSeriesChartSeries.TimeValue(environmentData.CreatedAt, environmentData.Temperature));
+        // }
+        StateHasChanged();
+    }
+    
+    private void OnNewData(EnvironmentData newEnvData)
+    {
+        tempatureData.Add(new (newEnvData.CreatedAt, newEnvData.Temperature));
+        InvokeAsync(StateHasChanged);
+    }
+
+
+    protected override void OnInitialized()
+    {
+        base.OnInitialized();
+
+        updateTempData();
+        API.PostData.EnvironmentDataUpdated += OnNewData;
+        
+        tempChart = new TimeSeriesChartSeries
+        {
+            Index = 0,
+            Name = "Temperature",
+            Data = tempatureData,
+            IsVisible = true,
+            LineDisplayType = LineDisplayType.Line,
+            DataMarkerTooltipTitleFormat = "{{X_VALUE}}",
+            DataMarkerTooltipSubtitleFormat = "{{Y_VALUE}}°C",
+            ShowDataMarkers = true
+        };
+
+        _series.Add(tempChart);
+
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        API.PostData.EnvironmentDataUpdated -= OnNewData;
+    }
+}

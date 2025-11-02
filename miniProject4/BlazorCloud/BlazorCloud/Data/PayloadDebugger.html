@@ -1,0 +1,127 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Payload Generator for Encryption Testing</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        input, select {
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 5px;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            margin-bottom: 10px;
+        }
+        button {
+            padding: 10px;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+<h1>Payload Generator</h1>
+
+<h2>Payload Details</h2>
+<label for="teamNumber">Team Number:</label>
+<input type="number" id="teamNumber" value="2">
+
+<label for="temperature">Temperature:</label>
+<input type="number" id="temperature" step="0.1" value="25.5">
+
+<label for="humidity">Humidity:</label>
+<input type="number" id="humidity" value="60">
+
+<label for="timestamp">Timestamp:</label>
+<input type="datetime-local" id="timestamp"
+       value="2025-10-29T12:00">
+
+<h2>Payload Actions</h2>
+<button onclick="generatePayload()">Generate Plain Payload</button>
+<button onclick="generateEncryptedPayload()">Generate Encrypted Payload</button>
+
+<h2>Output</h2>
+<textarea id="output" readonly></textarea>
+
+<script>
+    const AES_KEY = "1234567890abcdef";
+    const AES_IV = "abcdef1234567890";
+
+    function generatePayload() {
+        const payload = {
+            team_number: parseInt(document.getElementById('teamNumber').value),
+            temperature: parseFloat(document.getElementById('temperature').value),
+            humidity: parseInt(document.getElementById('humidity').value),
+            timestamp: new Date(document.getElementById('timestamp').value).toISOString()
+        };
+
+        document.getElementById('output').value = JSON.stringify(payload, null, 2);
+    }
+
+    function generateEncryptedPayload() {
+        const payload = {
+            team_number: parseInt(document.getElementById('teamNumber').value),
+            temperature: parseFloat(document.getElementById('temperature').value),
+            humidity: parseInt(document.getElementById('humidity').value),
+            timestamp: new Date(document.getElementById('timestamp').value).toISOString()
+        };
+
+        const payloadJson = JSON.stringify(payload);
+
+        // Simulate the encryption process
+        const encryptedPayload = encryptAES(payloadJson);
+
+        document.getElementById('output').value = encryptedPayload;
+    }
+
+    function encryptAES(text) {
+        // This is a simplified encryption simulation
+        // In a real-world scenario, you'd use a proper encryption library
+        const encoder = new TextEncoder();
+        const data = encoder.encode(text);
+
+        // Pad the data to be a multiple of 16 bytes
+        const paddedData = padData(data);
+
+        // Simulate base64 encoding of encrypted data
+        return btoa(String.fromCharCode.apply(null, paddedData));
+    }
+
+    function padData(data) {
+        const blockSize = 16;
+        const paddingLength = blockSize - (data.length % blockSize);
+        const paddedData = new Uint8Array(data.length + paddingLength);
+
+        paddedData.set(data);
+
+        // PKCS7 padding
+        for (let i = data.length; i < paddedData.length; i++) {
+            paddedData[i] = paddingLength;
+        }
+
+        return paddedData;
+    }
+
+    // Optional: Copy to clipboard functionality
+    document.getElementById('output').addEventListener('click', function() {
+        this.select();
+        try {
+            document.execCommand('copy');
+            alert('Payload copied to clipboard!');
+        } catch (err) {
+            console.error('Unable to copy', err);
+        }
+    });
+
+    // Initialize with a default payload on page load
+    document.addEventListener('DOMContentLoaded', generatePayload);
+</script>
+</body>
+</html>

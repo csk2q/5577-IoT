@@ -7,6 +7,7 @@ using BlazorCloud.Components;
 using BlazorCloud.Components.Account;
 using BlazorCloud.Data;
 using BlazorCloud.Middleware;
+using MudBlazor.Services;
 
 namespace BlazorCloud;
 
@@ -14,6 +15,9 @@ public class Program
 {
     public static void Main(string[] args)
     {
+        var weatherApiKey = File.ReadAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WeatherApi.key.txt"));
+        
+        
         var builder = WebApplication.CreateBuilder(args);
         
         builder.WebHost.ConfigureKestrel(serverOptions =>
@@ -29,6 +33,10 @@ public class Program
         builder.Services.AddScoped<IdentityUserAccessor>();
         builder.Services.AddScoped<IdentityRedirectManager>();
         builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
+
+        builder.Services.AddMudServices();
+        builder.Services.AddMudPopoverService();
+        builder.Services.AddMudBlazorDialog();
 
         builder.Services.AddControllers();
         // builder.Services.AddScoped<DecryptRequestFilter>();
