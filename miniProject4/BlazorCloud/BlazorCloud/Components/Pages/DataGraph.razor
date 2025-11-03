@@ -7,14 +7,13 @@
 
 <h3>DataGraph</h3>
 
-<b>The last five minutes of Temperature data in Celsius</b>
+<h4>The last five minutes of temperature data in the database:</h4>
 <MudPaper Class="doc-section-component-container">
-    @* Width="@_width" *@
-    <MudTimeSeriesChart ChartSeries="@_series"
+    <MudTimeSeriesChart ChartSeries="@tempatureSeries"
                         @bind-SelectedIndex="_index"
                         Width="100%"
-                        Height="@_height"
-                        ChartOptions="@_options"
+                        Height="350px"
+                        ChartOptions="@tempatureChartOptions"
                         AxisChartOptions="@_axisChartOptions"
                         CanHideSeries="false"
                         TimeLabelSpacing="TimeSpan.FromMinutes(5)"
@@ -22,24 +21,66 @@
                         TimeLabelSpacingRoundingPadSeries="false"
                         DataMarkerTooltipTimeLabelFormat="yyyy MMM dd HH:mm:ss"/>
 </MudPaper>
-
-<span>Last five received data:</span>
-<div id="tempDataContainer">
-@foreach (var data in dbContext.EnvironmentData.AsNoTracking().OrderByDescending(e => e.Id).Take(5))
-{
-    <span>@data.CreatedAt - T:@data.Temperature H:@data.Humidity</span><br>
-}
-</div>
+<br><br>
+<h4>The last five minutes of humidity data in the database:</h4>
+<MudPaper Class="doc-section-component-container">
+    <MudTimeSeriesChart ChartSeries="@humiditySeries"
+                        @bind-SelectedIndex="_index"
+                        Width="100%"
+                        Height="350px"
+                        ChartOptions="@tempatureChartOptions"
+                        AxisChartOptions="@_axisChartOptions"
+                        CanHideSeries="false"
+                        TimeLabelSpacing="TimeSpan.FromMinutes(5)"
+                        TimeLabelSpacingRounding="true"
+                        TimeLabelSpacingRoundingPadSeries="false"
+                        DataMarkerTooltipTimeLabelFormat="yyyy MMM dd HH:mm:ss"/>
+</MudPaper>
+<br><br>
+<h4>Last five data points received from the sensor:</h4>
+<table id="tempDataTable" class="table table-striped table-hover">
+    <thead>
+    <tr>
+        <th>Timestamp</th>
+        <th>Temperature (°C)</th>
+        <th>Humidity (%)</th>
+    </tr>
+    </thead>
+    <tbody>
+    @foreach (var data in dbContext.EnvironmentData
+                  .AsNoTracking()
+                  .OrderByDescending(e => e.Id)
+                  .Take(5))
+    {
+        <tr>
+            <td>@data.CreatedAt.ToString("yyyy‑MM‑dd HH:mm:ss")</td>
+            <td>@data.Temperature</td>
+            <td>@data.Humidity</td>
+        </tr>
+    }
+    </tbody>
+</table>
 
 @inject ApplicationDbContext dbContext;
 
 @code {
     private int _index = -1; //default value cannot be 0 -> first selectedindex is 0.
-    private ChartOptions _options = new ChartOptions
+    private ChartOptions tempatureChartOptions = new ChartOptions
         {
             YAxisLines = true,
-            YAxisTicks = 50,
-            MaxNumYAxisTicks = 10,
+            YAxisTicks = 1,
+            YAxisToStringFunc = (value) => $"{value}°C",
+            MaxNumYAxisTicks = 50,
+            YAxisRequireZeroPoint = false,
+            XAxisLines = true,
+            LineStrokeWidth = 1,
+        };
+    private ChartOptions humidityChartOptions = new ChartOptions
+        {
+            YAxisLines = true,
+            YAxisTicks = 10,
+            YAxisToStringFunc = (value) => $"{value}%",
+            MaxNumYAxisTicks = 100,
             YAxisRequireZeroPoint = true,
             XAxisLines = true,
             LineStrokeWidth = 1,
@@ -52,41 +93,39 @@
 
     private TimeSeriesChartSeries tempChart = new();
 
-    private List<TimeSeriesChartSeries> _series = new();
-
-    private string _width = "650px";
-    private string _height = "350px";
-    
-    // Timer
+    private List<TimeSeriesChartSeries> tempatureSeries = new();
+    private List<TimeSeriesChartSeries> humiditySeries = new();
     
     List<TimeSeriesChartSeries.TimeValue> tempatureData = [];
+    List<TimeSeriesChartSeries.TimeValue> humidityData = [];
 
     private void updateTempData()
     {
-        tempatureData = [];
         var fiveMinutesAgo = DateTime.Now - TimeSpan.FromMinutes(5.5);
         
-        tempatureData = dbContext.EnvironmentData
+        var envData = dbContext.EnvironmentData
             .AsNoTracking()
             .OrderByDescending(e => e.Id)
             .Where(e => e.CreatedAt >= fiveMinutesAgo)
             .Take((int)Math.Ceiling(60*5.1)) //Just over five minutes of data at a rate of one update per second.
-            .Select(e => new { e.CreatedAt, e.Temperature })
-            .ToList() // Required for temperature to be non-zero. Likely needed because of SQL reasons.
+            .Select(e => new { e.CreatedAt, e.Temperature, e.Humidity })
+            .ToList(); // Required for temperature to be non-zero. Likely needed because of SQL reasons.
+        
+        tempatureData = envData
             .Select(r => new TimeSeriesChartSeries.TimeValue(r.CreatedAt, r.Temperature))
             .ToList();
         
-        // foreach (var environmentData in dbContext.EnvironmentData.AsNoTracking().OrderByDescending(e => e.Id)
-        //              .Where(e => e.CreatedAt >= fiveMinutesAgo))
-        // {
-        //     tempatureData.Add(new TimeSeriesChartSeries.TimeValue(environmentData.CreatedAt, environmentData.Temperature));
-        // }
+        humidityData = envData
+            .Select(r => new TimeSeriesChartSeries.TimeValue(r.CreatedAt, r.Humidity))
+            .ToList();
+        
         StateHasChanged();
     }
     
     private void OnNewData(EnvironmentData newEnvData)
     {
         tempatureData.Add(new (newEnvData.CreatedAt, newEnvData.Temperature));
+        humidityData.Add(new (newEnvData.CreatedAt, newEnvData.Humidity));
         InvokeAsync(StateHasChanged);
     }
 
@@ -97,8 +136,8 @@
 
         updateTempData();
         API.PostData.EnvironmentDataUpdated += OnNewData;
-        
-        tempChart = new TimeSeriesChartSeries
+
+        tempatureSeries.Add(new TimeSeriesChartSeries
         {
             Index = 0,
             Name = "Temperature",
@@ -108,9 +147,20 @@
             DataMarkerTooltipTitleFormat = "{{X_VALUE}}",
             DataMarkerTooltipSubtitleFormat = "{{Y_VALUE}}°C",
             ShowDataMarkers = true
-        };
+        });
+        
+        humiditySeries.Add(new TimeSeriesChartSeries
+        {
+            Index = 0,
+            Name = "Humidity",
+            Data = tempatureData,
+            IsVisible = true,
+            LineDisplayType = LineDisplayType.Line,
+            DataMarkerTooltipTitleFormat = "{{X_VALUE}}",
+            DataMarkerTooltipSubtitleFormat = "{{Y_VALUE}}%",
+            ShowDataMarkers = true
+        });
 
-        _series.Add(tempChart);
 
         StateHasChanged();
     }
