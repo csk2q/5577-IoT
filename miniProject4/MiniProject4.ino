@@ -425,7 +425,8 @@ bool transmitSensorData(const SensorData& data) {
     
     HTTPClient http;
     http.begin(networkConfig.serverUrl.c_str());
-    http.addHeader("Content-Type", "text/plain");
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("X-Encrypted", "true");
     
     String jsonData = createJSONPayload(data);
     String encryptedData = encryptData(jsonData);
