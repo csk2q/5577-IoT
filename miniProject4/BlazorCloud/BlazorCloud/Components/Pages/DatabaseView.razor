@@ -3,7 +3,7 @@
 @using BlazorCloud.Data
 @using BlazorCloud.Data.Entities
 @using Microsoft.EntityFrameworkCore
-@implements IDisposable
+@* @implements IDisposable *@
 @rendermode InteractiveServer
 
 <h3>DatabaseView</h3>
@@ -44,7 +44,7 @@ else
 
     private bool loading = true;
 
-    private string searchString;
+    private string searchString = "";
     private Func<EnvironmentData, bool> TimestampQuickFilter => envData => envData.CreatedAt.ToLongDateString().Contains(searchString);
 
 

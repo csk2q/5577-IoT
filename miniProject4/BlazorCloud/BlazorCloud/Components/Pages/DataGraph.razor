@@ -2,7 +2,7 @@
 @using BlazorCloud.Data
 @using BlazorCloud.Data.Entities
 @using Microsoft.EntityFrameworkCore
-@implements IDisposable
+@* @implements IDisposable *@
 
 @rendermode InteractiveServer
 
@@ -107,7 +107,7 @@
         var envData = dbContext.EnvironmentData
             .AsNoTracking()
             .OrderByDescending(e => e.Id)
-            .Where(e => e.CreatedAt >= fiveMinutesAgo)
+            // .Where(e => e.CreatedAt >= fiveMinutesAgo)
             .Take((int)Math.Ceiling(60*5.1)) //Just over five minutes of data at a rate of one update per second.
             .Select(e => new { e.CreatedAt, e.Temperature, e.Humidity })
             .ToList(); // Required for temperature to be non-zero. Likely needed because of SQL reasons.
