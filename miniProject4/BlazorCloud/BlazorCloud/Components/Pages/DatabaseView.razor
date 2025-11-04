@@ -2,11 +2,15 @@
 @using System.Collections.ObjectModel
 @using BlazorCloud.Data
 @using BlazorCloud.Data.Entities
+@using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @* @implements IDisposable *@
 @rendermode InteractiveServer
+@attribute [Authorize]
 
 <h3>DatabaseView</h3>
+
+<AuthorizeView>
 
 @if (loading)
 {
@@ -37,6 +41,8 @@ else
         </PagerContent>
     </MudDataGrid>
 }
+
+</AuthorizeView>
 
 @inject ApplicationDbContext dbContext
 

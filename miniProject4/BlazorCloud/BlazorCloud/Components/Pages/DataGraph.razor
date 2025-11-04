@@ -2,10 +2,15 @@
 @using BlazorCloud.Data
 @using BlazorCloud.Data.Entities
 @using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Authorization
 @* @implements IDisposable *@
 
 @rendermode InteractiveServer
+@attribute [Authorize]
+@inject ApplicationDbContext dbContext;
 
+<AuthorizeView>
+    
 <h3>DataGraph</h3>
 
 <h4>The last five minutes of temperature data in the database:</h4>
@@ -62,7 +67,7 @@
     </tbody>
 </table>
 
-@inject ApplicationDbContext dbContext;
+</AuthorizeView>
 
 @code {
     private int _index = -1; //default value cannot be 0 -> first selectedindex is 0.
