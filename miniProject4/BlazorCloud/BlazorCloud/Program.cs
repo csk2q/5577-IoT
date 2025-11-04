@@ -7,15 +7,18 @@ using BlazorCloud.Components;
 using BlazorCloud.Components.Account;
 using BlazorCloud.Data;
 using BlazorCloud.Middleware;
+using BlazorCloud.Services;
 using MudBlazor.Services;
 
 namespace BlazorCloud;
 
 public class Program
 {
+    public static string weatherApiKey { get; private set;}
+
     public static void Main(string[] args)
     {
-        var weatherApiKey = File.ReadAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WeatherApi.key.txt"));
+        weatherApiKey = File.ReadAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "WeatherApi.key.txt"));
         
         
         var builder = WebApplication.CreateBuilder(args);
@@ -33,7 +36,11 @@ public class Program
         builder.Services.AddScoped<IdentityUserAccessor>();
         builder.Services.AddScoped<IdentityRedirectManager>();
         builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
-
+        
+        builder.Services.AddMemoryCache();
+        builder.Services.AddHttpClient();
+        builder.Services.AddScoped<WeatherApiService>();
+        
         builder.Services.AddMudServices();
         builder.Services.AddMudPopoverService();
         builder.Services.AddMudBlazorDialog();
@@ -98,6 +105,7 @@ public class Program
 
         });*/
         app.MapPost("post-data", PostData.Upload);
+        app.MapGet("api/weather", Weather.Query);
         app.MapPost("test", async httpContext =>
         {
             Console.WriteLine("Payload=" + await new StreamReader(httpContext.Request.Body, Encoding.UTF8).ReadToEndAsync());
