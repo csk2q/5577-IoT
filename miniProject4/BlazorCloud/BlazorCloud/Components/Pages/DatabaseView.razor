@@ -60,7 +60,7 @@ else
     {
 
         rowElements = new ObservableCollection<EnvironmentData>(dbContext.EnvironmentData);
-        // API.PostData.EnvironmentDataUpdated += OnNewData;
+        API.PostData.EnvironmentDataUpdated += OnNewData;
         loading = false;
     }
 
@@ -71,7 +71,7 @@ else
 
     public void Dispose()
     {
-        // API.PostData.EnvironmentDataUpdated -= OnNewData;
+        API.PostData.EnvironmentDataUpdated -= OnNewData;
         // dbContext.Dispose(); // Don't dispose the db context since it is shared.
     }
 
