@@ -1,0 +1,78 @@
+﻿@page "/DatabaseView"
+@using System.Collections.ObjectModel
+@using BlazorCloud.Data
+@using BlazorCloud.Data.Entities
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.EntityFrameworkCore
+@* @implements IDisposable *@
+@rendermode InteractiveServer
+@attribute [Authorize]
+
+<h3>DatabaseView</h3>
+
+<AuthorizeView>
+
+@if (loading)
+{
+    <span>Loading data...</span>
+}
+else
+{
+
+    <MudDataGrid Items="@rowElements" Filterable="true" RowsPerPage="10" Hideable="true" Dense="true" Bordered="true"
+                 Virtualize="true" SortMode="SortMode.Single" QuickFilter="TimestampQuickFilter"
+                 Style="max-height: 100%">
+        <ToolBarContent>
+            <MudText Typo="Typo.h6">Received Measurements</MudText>
+            <MudSpacer/>
+            <MudTextField @bind-Value="searchString" Placeholder="Search Timestamps" Adornment="Adornment.Start" Immediate="true"
+                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+        </ToolBarContent>
+        <Columns>
+            <PropertyColumn Property="x => x.Id" Title="Row Id"/>
+            <PropertyColumn Property="x => x.CreatedAt" Title="Time Recorded"/>
+            <PropertyColumn Property="x => x.TeamNumber" Title="Team Number"/>
+            <PropertyColumn Property="x => x.Temperature" Title="Temperature °C"/>
+            <PropertyColumn Property="x => x.Humidity" Title="Humidity %"/>
+            <PropertyColumn Property="x => x.Timestamp" Title="Time since startup"/>
+        </Columns>
+        <PagerContent>
+            <MudDataGridPager T="@EnvironmentData"/>
+        </PagerContent>
+    </MudDataGrid>
+}
+
+</AuthorizeView>
+
+@inject ApplicationDbContext dbContext
+
+@code {
+
+    private bool loading = true;
+
+    private string searchString = "";
+    private Func<EnvironmentData, bool> TimestampQuickFilter => envData => envData.CreatedAt.ToLongDateString().Contains(searchString);
+
+
+    private ObservableCollection<EnvironmentData> rowElements = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+
+        rowElements = new ObservableCollection<EnvironmentData>(dbContext.EnvironmentData);
+        // API.PostData.EnvironmentDataUpdated += OnNewData;
+        loading = false;
+    }
+
+    private void OnNewData(EnvironmentData newEnvData)
+    {
+        rowElements.Add(newEnvData);
+    }
+
+    public void Dispose()
+    {
+        // API.PostData.EnvironmentDataUpdated -= OnNewData;
+        // dbContext.Dispose(); // Don't dispose the db context since it is shared.
+    }
+
+}

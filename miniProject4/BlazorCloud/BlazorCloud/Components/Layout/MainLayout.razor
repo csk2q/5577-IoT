@@ -1,0 +1,44 @@
+﻿@inherits LayoutComponentBase
+
+@* Required *@
+<MudThemeProvider />
+<MudPopoverProvider />
+
+@* Needed for dialogs *@
+<MudDialogProvider />
+
+@* Needed for snackbars *@
+<MudSnackbarProvider />
+
+
+<div class="page">
+    <div class="sidebar">
+        <NavMenu/>
+    </div>
+
+    <MudLayout>
+        @* <MudMainContent Style="padding-top: 0" MaxWidth="MaxWidth.Medium"> *@
+        <MudMainContent Style="padding-top: 0">
+            <main>
+                <div class="top-row px-4">
+                    <span>5577-IoT Mini-project #4</span>
+                    @* <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">5577-IoT Mini-project #4</a> *@
+                </div>
+                
+                @* <MudDrawer Open="true"> *@
+                @* *@
+                @* </MudDrawer> *@
+
+                <article class="content px-4">
+                    @Body
+                </article>
+            </main>
+        </MudMainContent>
+    </MudLayout>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
