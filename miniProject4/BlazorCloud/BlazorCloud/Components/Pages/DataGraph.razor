@@ -34,7 +34,7 @@
                         @bind-SelectedIndex="_index"
                         Width="100%"
                         Height="350px"
-                        ChartOptions="@tempatureChartOptions"
+                        ChartOptions="@humidityChartOptions"
                         AxisChartOptions="@_axisChartOptions"
                         CanHideSeries="false"
                         TimeLabelSpacing="TimeSpan.FromMinutes(5)"
@@ -160,7 +160,7 @@
         {
             Index = 0,
             Name = "Humidity",
-            Data = tempatureData,
+            Data = humidityData,
             IsVisible = true,
             LineDisplayType = LineDisplayType.Line,
             DataMarkerTooltipTitleFormat = "{{X_VALUE}}",
