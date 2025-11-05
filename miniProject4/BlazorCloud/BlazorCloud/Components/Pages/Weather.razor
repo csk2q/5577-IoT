@@ -1,66 +1,197 @@
 ﻿@page "/weather"
+@using BlazorCloud.Services
+@inject WeatherApiService WeatherApiService
 
-<PageTitle>Weather</PageTitle>
+<h3 class="mb-3">Current Weather</h3>
 
-<h1>Weather</h1>
+<!-- Search bar -->
+<div class="mb-3 d-flex">
+    <input @bind="newQuery"
+           @bind:event="oninput"
+           @onkeydown="HandleKeyDown"
+           placeholder="City name or lat,lon"
+           class="form-control me-2"/>
+    <button class="btn btn-primary"
+            @onclick="AddWeatherAsync"
+            disabled="@string.IsNullOrWhiteSpace(newQuery)">
+        Add Weather
+    </button>
+</div>
 
-<p>This component demonstrates showing data.</p>
+<!-- Weather cards -->
+<div class="d-flex flex-wrap justify-content-start gap-4">
+    @foreach (var card in WeatherCards)
+    {
+        <div class="card mb-3" style="width: 18rem;">
+            @if (card.IsLoading)
+            {
+                <div class="card-body">
+                    <p><em>Loading for “@card.Query”…</em></p>
+                </div>
+            }
+            else if (card.Error != null)
+            {
+                <div class="card-body">
+                    <p class="text-danger">
+                        <strong>Error for “@card.Query”</strong>: @card.Error
+                    </p>
+                </div>
+            }
+            else if (card.Weather?.data?.current is not null)
+            {
+                <img src="@GetIconUrl(card.Weather.data)"
+                     class="card-img-top"
+                     alt="@card.Weather.data.current.condition?.text"/>
 
-@if (forecasts == null)
-{
-    <p>
-        <em>Loading...</em>
-    </p>
-}
-else
-{
-    <table class="table">
-        <thead>
-        <tr>
-            <th>Date</th>
-            <th aria-label="Temperature in Celsius">Temp. (C)</th>
-            <th aria-label="Temperature in Farenheit">Temp. (F)</th>
-            <th>Summary</th>
-        </tr>
-        </thead>
-        <tbody>
-        @foreach (var forecast in forecasts)
-        {
-            <tr>
-                <td>@forecast.Date.ToShortDateString()</td>
-                <td>@forecast.TemperatureC</td>
-                <td>@forecast.TemperatureF</td>
-                <td>@forecast.Summary</td>
-            </tr>
-        }
-        </tbody>
-    </table>
-}
+                <div class="card-body">
+                    <h5 class="card-title">
+                        @card.Weather.data.location.name,
+                        @card.Weather.data.location.region
+                        @if (!string.IsNullOrWhiteSpace(card.Weather.data.location.country))
+                        {
+                            <small class="text-muted">(@card.Weather.data.location.country)</small>
+                        }
+                    </h5>
+
+                    <p class="card-text">
+                        <strong>Temp:</strong> @card.Weather.data.current.temp_c?.ToString("0.0") °C<br/>
+                        <strong>Humidity:</strong> @card.Weather.data.current.humidity %<br/>
+                        <strong>Condition:</strong> @card.Weather.data.current.condition?.text
+                    </p>
+                </div>
+            }
+            else
+            {
+                <div class="card-body">
+                    <p class="text-danger">
+                        <strong>Unable to load weather data for “@card.Query”</strong>
+                    </p>
+                </div>
+            }
+
+            <div class="card-footer d-flex justify-content-between align-items-center">
+                <small class="text-muted">
+                    Updated @GetUpdatedTime(card)
+                </small>
+
+                <div>
+                    <button class="btn btn-sm btn-outline-primary me-1"
+                            @onclick="() => RefreshCardAsync(card)"
+                            disabled="@card.IsLoading">
+                        Refresh
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger"
+                            @onclick="() => RemoveCard(card)">
+                        Remove
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
 
 @code {
-    private WeatherForecast[]? forecasts;
 
-    protected override async Task OnInitializedAsync()
+    // UI state
+    private string newQuery = string.Empty;
+
+    // Model representing a single weather card
+    private class WeatherCard
     {
-        // Simulate asynchronous loading to demonstrate a loading indicator
-        await Task.Delay(500);
-
-        var startDate = DateOnly.FromDateTime(DateTime.Now);
-        var summaries = new[] { "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching" };
-        forecasts = Enumerable.Range(1, 5).Select(index => new WeatherForecast
-        {
-            Date = startDate.AddDays(index),
-            TemperatureC = Random.Shared.Next(-20, 55),
-            Summary = summaries[Random.Shared.Next(summaries.Length)]
-        }).ToArray();
+        public string Query { get; set; } = string.Empty;
+        public WeatherApiService.WeatherData? Weather { get; set; } = null;
+        public bool IsLoading { get; set; } = false;
+        public string? Error { get; set; } = null;
     }
 
-    private class WeatherForecast
+    // All cards that have been added
+    private List<WeatherCard> WeatherCards = new();
+
+    // ----- Event handlers -----
+    private async Task AddWeatherAsync()
     {
-        public DateOnly Date { get; set; }
-        public int TemperatureC { get; set; }
-        public string? Summary { get; set; }
-        public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
+        var query = newQuery.Trim();
+        if (string.IsNullOrEmpty(query))
+            return;
+
+        // Prevent duplicate queries
+        if (WeatherCards.Any(c => c.Query.Equals(query, StringComparison.OrdinalIgnoreCase)))
+        {
+            newQuery = string.Empty;
+            return;
+        }
+
+        var card = new WeatherCard { Query = query, IsLoading = true };
+        WeatherCards.Add(card);
+        newQuery = string.Empty;
+
+        await LoadWeatherForCardAsync(card);
+    }
+
+    private async Task RefreshCardAsync(WeatherCard card)
+    {
+        card.IsLoading = true;
+        card.Error = null;
+        await LoadWeatherForCardAsync(card);
+    }
+
+    private void RemoveCard(WeatherCard card) => WeatherCards.Remove(card);
+
+    private async Task LoadWeatherForCardAsync(WeatherCard card)
+    {
+        try
+        {
+            var result = await WeatherApiService.QueryAsync(card.Query);
+
+            if (result?.data == null)
+            {
+                card.Error = "No weather data returned for the requested location.";
+                card.Weather = null;
+            }
+            else
+            {
+                card.Weather = result;
+                card.Error = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            card.Error = $"Error retrieving weather: {ex.Message}";
+            card.Weather = null;
+        }
+        finally
+        {
+            card.IsLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    // ----- Helper methods -----
+    private string GetIconUrl(WeatherApiService.WeatherJson? weather)
+    {
+        // The helper still needs a WeatherJson reference for the icon
+        var icon = weather?.current?.condition?.icon;
+        return string.IsNullOrWhiteSpace(icon)
+            ? string.Empty
+            : icon.StartsWith("//")
+                ? "https:" + icon
+                : icon;
+    }
+
+    // Uses the *WeatherData* that lives inside the card
+    private string GetUpdatedTime(WeatherCard card)
+    {
+        // WeatherData.queryTime is already a DateTime; format it
+        var ts = card.Weather?.queryTime ?? DateTime.Now;
+        return ts.ToString("HH:mm");
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await AddWeatherAsync();
+        }
     }
 
 }

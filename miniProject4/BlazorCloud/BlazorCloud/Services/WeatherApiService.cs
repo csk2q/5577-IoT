@@ -61,8 +61,8 @@ public class WeatherApiService(IMemoryCache cache, IHttpClientFactory httpFactor
     }
     
     public record WeatherJson(
-        [property: JsonPropertyName("location")] Location location,
-        [property: JsonPropertyName("current")] Current current
+        [property: JsonPropertyName("location")] Location? location,
+        [property: JsonPropertyName("current")] Current? current
     );
     
 // Root myDeserializedClass = JsonSerializer.Deserialize<Root>(myJsonResponse);

@@ -12,44 +12,53 @@
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="nav flex-column">
-        <div class="nav-item px-3">
+
+        <!-- Home -->
+        @*<div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
                 <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
             </NavLink>
-        </div>
+        </div>*@
 
-        <div class="nav-item px-3">
+        <!-- Counter (legacy) -->
+        @*<div class="nav-item px-3">
             <NavLink class="nav-link" href="counter">
                 <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
             </NavLink>
-        </div>
+        </div>*@
 
+        <!-- WeatherApi -->
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
+                <span class="bi bi-cloud-fill-nav-menu" aria-hidden="true"></span> WeatherApi
             </NavLink>
         </div>
         
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="DataGraph">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Data Graph
-            </NavLink>
-        </div>
-        
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="DatabaseView">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Db Viewer
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="auth">
-                <span class="bi bi-lock-nav-menu" aria-hidden="true"></span> Auth Required
-            </NavLink>
-        </div>
-
         <AuthorizeView>
             <Authorized>
+
+                <!-- Data Graphs -->
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="DataGraph">
+                        <span class="bi bi-bar-chart-line-nav-menu" aria-hidden="true"></span> Data Graphs
+                    </NavLink>
+                </div>
+                
+                <!-- Database View -->
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="DatabaseView">
+                        <span class="bi bi-database-nav-menu" aria-hidden="true"></span><span>Database View</span>
+                    </NavLink>
+                </div>
+
+                <!-- Auth Required (legacy) -->
+                @*<div class="nav-item px-3">
+                    <NavLink class="nav-link" href="auth">
+                        <span class="bi bi-lock-nav-menu" aria-hidden="true"></span> Auth Required
+                    </NavLink>
+                </div>*@
+
+                <!-- Account -->
                 <div class="nav-item px-3">
                     <NavLink class="nav-link" href="Account/Manage">
                         <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> @context.User.Identity?.Name

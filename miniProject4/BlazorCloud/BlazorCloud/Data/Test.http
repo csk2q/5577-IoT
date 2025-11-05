@@ -1,4 +1,6 @@
-﻿POST http://localhost:5250/post-data
+﻿###
+# Test post request
+POST http://127.0.0.1:5250/test
 Content-Type: application/json
 
 {
@@ -9,9 +11,8 @@ Content-Type: application/json
 }
 
 ###
-
 # Request without encription
-POST http://localhost:5250/post-data
+POST http://127.0.0.1:5250/post-data
 Content-Type: application/json
 
 {
@@ -23,16 +24,17 @@ Content-Type: application/json
 
 ###
 # Request with encription
-POST http://localhost:5250/post-data
+POST http://127.0.0.1:5250/test
 Content-Type: application/json
 X-Encrypted: true
 
 UOk19bdiFgyzwIeJuCH42/eKdfL/JTmkX7nS3jmIdADYpuwCxPK1zuGhFZGrBI7/kufVbSYe3INY+pXmSrZllBZcTvBKh4jz4Kvv1lG95s4=
+
 
 ###
-# Request with encription
-POST http://localhost:5250/test
-Content-Type: application/json
-X-Encrypted: true
+# Test weather api
+GET http://127.0.0.1:5250/api/weather?q=Kansas%20City
 
-UOk19bdiFgyzwIeJuCH42/eKdfL/JTmkX7nS3jmIdADYpuwCxPK1zuGhFZGrBI7/kufVbSYe3INY+pXmSrZllBZcTvBKh4jz4Kvv1lG95s4=
+###
+# Test weather api
+GET http://127.0.0.1:5250/api/weather?q=New%20York
