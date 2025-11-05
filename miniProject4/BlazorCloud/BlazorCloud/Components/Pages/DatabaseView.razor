@@ -1,10 +1,11 @@
 ﻿@page "/DatabaseView"
 @using System.Collections.ObjectModel
+@using System.Globalization
 @using BlazorCloud.Data
 @using BlazorCloud.Data.Entities
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
-@* @implements IDisposable *@
+@using MudBlazor.Extensions
 @rendermode InteractiveServer
 @attribute [Authorize]
 
@@ -12,66 +13,110 @@
 
 <AuthorizeView>
 
-@if (loading)
-{
-    <span>Loading data...</span>
-}
-else
-{
 
-    <MudDataGrid Items="@rowElements" Filterable="true" RowsPerPage="10" Hideable="true" Dense="true" Bordered="true"
-                 Virtualize="true" SortMode="SortMode.Single" QuickFilter="TimestampQuickFilter"
-                 Style="max-height: 100%">
-        <ToolBarContent>
-            <MudText Typo="Typo.h6">Received Measurements</MudText>
-            <MudSpacer/>
-            <MudTextField @bind-Value="searchString" Placeholder="Search Timestamps" Adornment="Adornment.Start" Immediate="true"
-                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
-        </ToolBarContent>
-        <Columns>
-            <PropertyColumn Property="x => x.Id" Title="Row Id"/>
-            <PropertyColumn Property="x => x.CreatedAt" Title="Time Recorded"/>
-            <PropertyColumn Property="x => x.TeamNumber" Title="Team Number"/>
-            <PropertyColumn Property="x => x.Temperature" Title="Temperature °C"/>
-            <PropertyColumn Property="x => x.Humidity" Title="Humidity %"/>
-            <PropertyColumn Property="x => x.Timestamp" Title="Time since startup"/>
-        </Columns>
-        <PagerContent>
-            <MudDataGridPager T="@EnvironmentData"/>
-        </PagerContent>
-    </MudDataGrid>
-}
+<MudDataGrid Items="@rowElements" Filterable="true" RowsPerPage="10" Hideable="true" Dense="true" Bordered="true"
+             Virtualize="true" SortMode="SortMode.Single" QuickFilter="TimestampQuickFilter"
+             Style="max-height: 100%">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Received Measurements</MudText>
+
+                <!-- Live‑updates toggle -->
+        <MudCheckBox T="bool" Value="liveUpdatesEnabled"
+                     ValueChanged="OnLiveUpdatesChanged"
+                     Class="ml-4"
+                     Label="Live updates" />
+
+        <MudSpacer/>
+        <MudTextField @bind-Value="searchString" Placeholder="Search Timestamps" Adornment="Adornment.Start" Immediate="true"
+                      AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+    </ToolBarContent>
+
+    <Columns>
+        <PropertyColumn Property="x => x.Id" Title="Row Id"/>
+        <PropertyColumn Property="x => x.CreatedAt" Title="Time Recorded"/>
+        <PropertyColumn Property="x => x.TeamNumber" Title="Team Number"/>
+        <PropertyColumn Property="x => x.Temperature" Title="Temperature °C"/>
+        <PropertyColumn Property="x => x.Humidity" Title="Humidity %"/>
+        <PropertyColumn Property="x => x.Timestamp" Title="Time since startup"/>
+    </Columns>
+
+    <PagerContent>
+        <MudDataGridPager T="@EnvironmentData"/>
+    </PagerContent>
+</MudDataGrid>
 
 </AuthorizeView>
 
 @inject ApplicationDbContext dbContext
 
 @code {
+    private string searchString = string.Empty;
+    private bool liveUpdatesEnabled = true;
 
-    private bool loading = true;
-
-    private string searchString = "";
-    private Func<EnvironmentData, bool> TimestampQuickFilter => envData => envData.CreatedAt.ToLongDateString().Contains(searchString);
-
+    private Func<EnvironmentData, bool> TimestampQuickFilter => envData =>
+        envData.CreatedAt.ToString("F").Contains(searchString) ||
+        envData.CreatedAt.ToString("G", CultureInfo.GetCultureInfoByIetfLanguageTag("en-US")).Contains(searchString);
 
     private ObservableCollection<EnvironmentData> rowElements = [];
 
     protected override async Task OnInitializedAsync()
     {
+        await ReloadDataAsync();
+        await OnLiveUpdatesChanged(liveUpdatesEnabled);
+    }
 
-        rowElements = new ObservableCollection<EnvironmentData>(dbContext.EnvironmentData);
+    // Helper that pulls everything from the database
+    private async Task ReloadDataAsync()
+    {
+        // A fresh collection – we replace the reference so MudDataGrid can notice the change
+        var all = await dbContext.EnvironmentData.ToListAsync();
+        rowElements = new ObservableCollection<EnvironmentData>(all);
+    }
+
+    // Live‑updates toggle handler
+    private async Task OnLiveUpdatesChanged(bool value)
+    {
+        // MudCheckBox passes a nullable bool – treat null as false
+        bool newState = value;
+
+        if (newState)
+        {
+            // 1. Reload the whole collection
+            await ReloadDataAsync();
+
+            // 2. Subscribe to new data
         API.PostData.EnvironmentDataUpdated += OnNewData;
-        loading = false;
+    }
+        else
+        {
+            // Unsubscribe
+            API.PostData.EnvironmentDataUpdated -= OnNewData;
+        }
+
+        liveUpdatesEnabled = newState;
+        StateHasChanged();
     }
 
     private void OnNewData(EnvironmentData newEnvData)
     {
-        rowElements.Add(newEnvData);
+        if (string.IsNullOrWhiteSpace(searchString))
+            rowElements.Add(newEnvData);
+        else if (liveUpdatesEnabled)
+        {
+            liveUpdatesEnabled = false;
+            InvokeAsync(async () =>
+            {
+                await OnLiveUpdatesChanged(liveUpdatesEnabled);
+                StateHasChanged();
+            });
+        }
     }
 
     public void Dispose()
     {
-        API.PostData.EnvironmentDataUpdated -= OnNewData;
+        // Clean up only if we ever subscribed
+        if (liveUpdatesEnabled)
+            API.PostData.EnvironmentDataUpdated -= OnNewData;
         // dbContext.Dispose(); // Don't dispose the db context since it is shared.
     }
 
