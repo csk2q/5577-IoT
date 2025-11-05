@@ -13,9 +13,12 @@ public delegate void EnvironmentDataUpdatedEventHandler(EnvironmentData environm
 public static class PostData
 {
     public static event EnvironmentDataUpdatedEventHandler? EnvironmentDataUpdated;
+    public static string SensorIp = string.Empty;
     
     public static async Task<IResult> Upload(UploadedData uploadedData, HttpContext httpContext, ApplicationDbContext dbContext)
     {
+        SensorIp = httpContext.Connection.RemoteIpAddress?.MapToIPv4().ToString() ?? string.Empty;
+        
         // Map DTO → EF entity
         var environmentData = new EnvironmentData
         {

@@ -1,28 +1,171 @@
 ﻿@page "/"
-@inject NavigationManager Nav
+@using BlazorCloud.API
+@using BlazorCloud.Data
+@using BlazorCloud.Data.Entities
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@implements IDisposable
+@inject ApplicationDbContext Db
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ILogger<Home> logger;
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Dashboard</PageTitle>
+<h1>Dashboard</h1>
 
-<h1>Hello, 5577-IoTs!</h1>
+<div class="container py-4">
+    <div class="row g-3">
 
-Welcome to your BlazorCloud.
+        <!-- 1. Environment rows card -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="bi bi-archive-fill fs-3 text-primary me-2"></i>
+                        <h5 class="card-title mb-0">Environment Data</h5>
+                    </div>
+                    @if (totalRows.HasValue && rowsLastMinute.HasValue)
+                    {
+                        <h3 class="display-6">@totalRows</h3>
+                        <p class="text-muted">@rowsLastMinute rows/min</p>
+                    }
+                    else
+                    {
+                        <div class="spinner-border text-secondary" role="status">
+                            <span class="visually-hidden">Loading…</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Most recent temperature/humidity card -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="bi bi-thermometer-half fs-3 text-danger me-2"></i>
+                        <h5 class="card-title mb-0">Latest Reading</h5>
+                    </div>
+                    @if (latestReading != null)
+                    {
+                        <h4 class="display-6">@latestReading.Temperature°C / @latestReading.Humidity%</h4>
+                        <p class="text-muted">
+                            @latestReading.CreatedAt.ToLocalTime()
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="spinner-border text-secondary" role="status">
+                            <span class="visually-hidden">Loading…</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Sensor configuration card -->
+        <div class="col-md-6 col-lg-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body text-center">
+                    <div class="d-flex align-items-center mb-2 justify-content-center">
+                        <i class="bi bi-gear-fill fs-3 text-success me-2"></i>
+                        <h5 class="card-title mb-0">Configure Sensor</h5>
+                    </div>
+                    <a class="btn btn-outline-primary btn-lg"
+                       href="http://@PostData.SensorIp"
+                       target="_blank">
+                        <i class="bi bi-box-arrow-up-right"></i> Open Sensor UI
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. User info card – shown only when signed‑in -->
+        <AuthorizeView>
+            <Authorized>
+        <div class="col-md-6 col-lg-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-center mb-2">
+                        <i class="bi bi-person-circle fs-3 text-info me-2"></i>
+                        <h5 class="card-title mb-0">User Logged in</h5>
+                    </div>
+                    @if (context.User.Identity?.Name != null)
+                    {
+                        @* <h4 class="display-7">@context.User.Identity.AuthenticationType</h4> *@
+                        <p class="display-8">
+                            Logged in as: @context.User.Identity?.Name
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="spinner-border text-secondary" role="status">
+                            <span class="visually-hidden">Loading…</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+            </Authorized>
+            <!-- Optional – what to show if the user is NOT signed‑in -->
+            <NotAuthorized>
+                <div class="col-12 text-center">
+                    <p class="text-muted">Log in to see your profile information.</p>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+
+    </div>
+</div>
 
 @code {
-    static bool haveRedirectedAllready = false;
-    
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    private int? totalRows;
+    private int? rowsLastMinute;
+    private EnvironmentData? latestReading;
+
+    private System.Threading.Timer? _timer;
+
+    protected override async Task OnInitializedAsync()
     {
-        _ = Task.Run(() =>
+        // First run immediately
+        await RefreshDataAsync();
+
+        // Kick off a 1‑second timer
+        _timer = new Timer(async _ => await InvokeAsync(RefreshDataAsync),
+                                            null,
+                                            TimeSpan.FromSeconds(1),   // due time
+                                            TimeSpan.FromSeconds(1));  // period
+    }
+
+    private async Task RefreshDataAsync()
+    {
+        try
         {
-            Task.Delay(100);
-            InvokeAsync(() =>
-            {
-                if (firstRender && !haveRedirectedAllready)
-                {
-                    haveRedirectedAllready = true;
-                    Nav.NavigateTo("/weather");
-                }
-            });
-        });
+            // Grab the latest data from the database
+            totalRows = await Db.EnvironmentData.CountAsync();
+
+            var oneMinuteAgo = DateTime.UtcNow.AddMinutes(-1);
+            rowsLastMinute = await Db.EnvironmentData
+                .CountAsync(ed => ed.CreatedAt >= oneMinuteAgo);
+
+            latestReading = await Db.EnvironmentData
+                .OrderByDescending(ed => ed.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            // Ensure the UI re‑renders on the UI thread
+            StateHasChanged();
+        }
+        catch (ObjectDisposedException e)
+        {
+            logger.LogError(e, "DbContext was disposed too early?");
+            _timer?.DisposeAsync();
+            _timer = null;
+        }
+    }
+
+    // Clean up the timer when the component is disposed
+    public void Dispose()
+    {
+        _timer?.Dispose();
     }
 }
