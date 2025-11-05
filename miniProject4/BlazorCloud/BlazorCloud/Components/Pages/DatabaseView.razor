@@ -14,36 +14,39 @@
 <AuthorizeView>
 
 
-<MudDataGrid Items="@rowElements" Filterable="true" RowsPerPage="10" Hideable="true" Dense="true" Bordered="true"
-             Virtualize="true" SortMode="SortMode.Single" QuickFilter="TimestampQuickFilter"
-             Style="max-height: 100%">
-    <ToolBarContent>
-        <MudText Typo="Typo.h6">Received Measurements</MudText>
+    <MudDataGrid Items="@rowElements" Filterable="true" RowsPerPage="10" Hideable="true" Dense="true" Bordered="true"
+                 Virtualize="true" SortMode="SortMode.Single" QuickFilter="TimestampQuickFilter"
+                 Style="max-height: 100%">
+        <ToolBarContent>
+            <MudText Typo="Typo.h6">Received Measurements</MudText>
 
-                <!-- Live‑updates toggle -->
-        <MudCheckBox T="bool" Value="liveUpdatesEnabled"
-                     ValueChanged="OnLiveUpdatesChanged"
-                     Class="ml-4"
-                     Label="Live updates" />
+            <!-- Live‑updates toggle -->
+            <MudCheckBox T="bool" Value="liveUpdatesEnabled"
+                         ValueChanged="OnLiveUpdatesChanged"
+                         Class="ml-4"
+                         Label="Live updates"/>
 
-        <MudSpacer/>
-        <MudTextField @bind-Value="searchString" Placeholder="Search Timestamps" Adornment="Adornment.Start" Immediate="true"
-                      AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
-    </ToolBarContent>
+            <MudSpacer/>
+            <MudTextField @bind-Value="searchString" Placeholder="Search Timestamps" Adornment="Adornment.Start"
+                          Immediate="true"
+                          AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium"
+                          Class="mt-0"></MudTextField>
+        </ToolBarContent>
 
-    <Columns>
-        <PropertyColumn Property="x => x.Id" Title="Row Id"/>
-        <PropertyColumn Property="x => x.CreatedAt" Title="Time Recorded"/>
-        <PropertyColumn Property="x => x.TeamNumber" Title="Team Number"/>
-        <PropertyColumn Property="x => x.Temperature" Title="Temperature °C"/>
-        <PropertyColumn Property="x => x.Humidity" Title="Humidity %"/>
-        <PropertyColumn Property="x => x.Timestamp" Title="Time since startup"/>
-    </Columns>
+        <Columns>
+            <PropertyColumn Property="x => x.Id" Title="Row Id"/>
+            <PropertyColumn Property="x => TimeZoneInfo.ConvertTime(x.CreatedAt, TimeZoneInfo.Local)"
+                            Title="Time Recorded"/>
+            <PropertyColumn Property="x => x.TeamNumber" Title="Team Number"/>
+            <PropertyColumn Property="x => x.Temperature" Title="Temperature °C"/>
+            <PropertyColumn Property="x => x.Humidity" Title="Humidity %"/>
+            <PropertyColumn Property="x => x.Timestamp" Title="Time since startup"/>
+        </Columns>
 
-    <PagerContent>
-        <MudDataGridPager T="@EnvironmentData"/>
-    </PagerContent>
-</MudDataGrid>
+        <PagerContent>
+            <MudDataGridPager T="@EnvironmentData"/>
+        </PagerContent>
+    </MudDataGrid>
 
 </AuthorizeView>
 
@@ -54,8 +57,15 @@
     private bool liveUpdatesEnabled = true;
 
     private Func<EnvironmentData, bool> TimestampQuickFilter => envData =>
-        envData.CreatedAt.ToString("F").Contains(searchString) ||
-        envData.CreatedAt.ToString("G", CultureInfo.GetCultureInfoByIetfLanguageTag("en-US")).Contains(searchString);
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+
+        var time = TimeZoneInfo.ConvertTime(envData.CreatedAt, TimeZoneInfo.Local);
+        var string1 = time.ToString("F");
+        var string2 = time.ToString("G", CultureInfo.GetCultureInfoByIetfLanguageTag("en-US"));
+        return string1.Contains(searchString) || string2.Contains(searchString);
+    };
 
     private ObservableCollection<EnvironmentData> rowElements = [];
 
@@ -81,12 +91,13 @@
 
         if (newState)
         {
-            // 1. Reload the whole collection
+            searchString = string.Empty;
+            StateHasChanged();
+
             await ReloadDataAsync();
 
-            // 2. Subscribe to new data
-        API.PostData.EnvironmentDataUpdated += OnNewData;
-    }
+            API.PostData.EnvironmentDataUpdated += OnNewData;
+        }
         else
         {
             // Unsubscribe
