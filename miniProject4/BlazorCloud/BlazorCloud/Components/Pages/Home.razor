@@ -12,10 +12,17 @@ Welcome to your BlazorCloud.
     
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && !haveRedirectedAllready)
+        _ = Task.Run(() =>
         {
-            haveRedirectedAllready = true;
-            Nav.NavigateTo("/weather");
-        }
+            Task.Delay(100);
+            InvokeAsync(() =>
+            {
+                if (firstRender && !haveRedirectedAllready)
+                {
+                    haveRedirectedAllready = true;
+                    Nav.NavigateTo("/weather");
+                }
+            });
+        });
     }
 }
