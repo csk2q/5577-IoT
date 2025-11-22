@@ -5,8 +5,16 @@ import { useNavigate } from 'react-router-dom';
 import { patientAPI, authAPI, getErrorMessage } from '../services/api';
 import { Patient } from '../types';
 import PatientCard from '../components/PatientCard';
+import { useSSE, SSESensorReadingEvent, SSEAlertTriggeredEvent, SSEAlertAcknowledgedEvent } from '../hooks/useSSE';
 
 type SortOption = 'room_number' | 'name' | 'patient_id';
+
+interface SensorReading {
+  oxygen_level: number;
+  heart_rate: number;
+  temperature: number;
+  timestamp: string;
+}
 
 const DashboardPage = () => {
   const { user, logout } = useAuth();
@@ -16,6 +24,51 @@ const DashboardPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('room_number');
+  
+  // Real-time sensor data: Map<sensor_id, latest_reading>
+  const [sensorData, setSensorData] = useState<Map<string, SensorReading>>(new Map());
+  
+  // Active alerts: Set<patient_id>
+  const [activeAlerts, setActiveAlerts] = useState<Set<string>>(new Set());
+
+  // SSE Connection for real-time updates
+  const { connectionState, reconnect } = useSSE({
+    url: '/stream/sensor-data',
+    enabled: true,
+    onSensorReading: (event: SSESensorReadingEvent) => {
+      // Update sensor data map
+      setSensorData((prev) => {
+        const newMap = new Map(prev);
+        newMap.set(event.data.sensor_id, {
+          oxygen_level: event.data.oxygen_level || 0,
+          heart_rate: event.data.heart_rate || 0,
+          temperature: event.data.temperature || 0,
+          timestamp: event.data.timestamp,
+        });
+        return newMap;
+      });
+    },
+    onAlertTriggered: (event: SSEAlertTriggeredEvent) => {
+      // Add patient to active alerts
+      setActiveAlerts((prev) => {
+        const newSet = new Set(prev);
+        newSet.add(event.data.patient_id);
+        return newSet;
+      });
+      console.log('Alert triggered:', event.data.message);
+    },
+    onAlertAcknowledged: (event: SSEAlertAcknowledgedEvent) => {
+      // Note: We'd need patient_id in the event to remove from activeAlerts
+      // For now, we'll keep alerts in the set until page refresh
+      console.log('Alert acknowledged:', event.data);
+    },
+    onConnected: () => {
+      console.log('SSE connected - receiving real-time updates');
+    },
+    onError: (error) => {
+      console.error('SSE connection error:', error);
+    },
+  });
 
   // Fetch patients on mount and when sort changes
   useEffect(() => {
@@ -63,6 +116,32 @@ const DashboardPage = () => {
             <strong>IoT Nursing Station</strong>
           </Navbar.Brand>
           <Nav className="ms-auto align-items-center">
+            {/* Connection Status Indicator */}
+            <Nav.Item className="me-3">
+              {connectionState === 'connected' && (
+                <span className="badge bg-success">
+                  <i className="bi bi-circle-fill me-1" style={{ fontSize: '0.5rem' }}></i>
+                  Live
+                </span>
+              )}
+              {connectionState === 'connecting' && (
+                <span className="badge bg-warning text-dark">
+                  <i className="bi bi-arrow-clockwise me-1"></i>
+                  Connecting...
+                </span>
+              )}
+              {(connectionState === 'disconnected' || connectionState === 'error') && (
+                <span 
+                  className="badge bg-danger" 
+                  style={{ cursor: 'pointer' }}
+                  onClick={reconnect}
+                  title="Click to reconnect"
+                >
+                  <i className="bi bi-exclamation-triangle me-1"></i>
+                  Offline (Click to reconnect)
+                </span>
+              )}
+            </Nav.Item>
             <Nav.Item className="text-light me-3">
               <small>
                 <strong>{user?.role?.toUpperCase()}</strong> | Employee ID: {user?.employee_id}
@@ -140,18 +219,21 @@ const DashboardPage = () => {
         {/* Patient Grid */}
         {!loading && !error && patients.length > 0 && (
           <Row className="g-3">
-            {patients.map((patient) => (
-              <Col key={patient.patient_id} xs={12} sm={6} lg={4} xl={3}>
-                <PatientCard
-                  patient={patient}
-                  // TODO: Pass latestReading from SSE or API
-                  // latestReading={sensorData[patient.sensor_id]}
-                  // TODO: Pass hasActiveAlert from alert state
-                  // hasActiveAlert={activeAlerts.has(patient.patient_id)}
-                  onClick={() => console.log('Patient clicked:', patient.patient_id)}
-                />
-              </Col>
-            ))}
+            {patients.map((patient) => {
+              const reading = patient.sensor_id ? sensorData.get(patient.sensor_id) : undefined;
+              const hasAlert = activeAlerts.has(patient.patient_id);
+              
+              return (
+                <Col key={patient.patient_id} xs={12} sm={6} lg={4} xl={3}>
+                  <PatientCard
+                    patient={patient}
+                    latestReading={reading}
+                    hasActiveAlert={hasAlert}
+                    onClick={() => console.log('Patient clicked:', patient.patient_id)}
+                  />
+                </Col>
+              );
+            })}
           </Row>
         )}
 
