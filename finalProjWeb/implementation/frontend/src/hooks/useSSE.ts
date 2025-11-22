@@ -41,6 +41,7 @@ export interface SSEAlertAcknowledgedEvent {
   type: 'alert_acknowledged';
   data: {
     alert_id: number;
+    patient_id: string;
     acknowledged_by: string;
     acknowledged_at: string;
   };

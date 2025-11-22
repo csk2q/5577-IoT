@@ -11,6 +11,7 @@ interface PatientCardProps {
   };
   hasActiveAlert?: boolean;
   onClick?: () => void;
+  onAcknowledgeAlert?: (patientId: string) => void;
 }
 
 /**
@@ -24,8 +25,15 @@ const PatientCard: React.FC<PatientCardProps> = ({
   patient,
   latestReading,
   hasActiveAlert = false,
-  onClick
+  onClick,
+  onAcknowledgeAlert
 }) => {
+  const handleAcknowledge = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click
+    if (onAcknowledgeAlert) {
+      onAcknowledgeAlert(patient.patient_id);
+    }
+  };
   // Format timestamp to readable time
   const formatTime = (timestamp: string) => {
     const date = new Date(timestamp);
@@ -177,9 +185,21 @@ const PatientCard: React.FC<PatientCardProps> = ({
 
         {/* Alert Indicator */}
         {hasActiveAlert && (
-          <div className="alert alert-danger mt-3 mb-0 py-2 small" role="alert">
-            <i className="bi bi-exclamation-triangle-fill me-2"></i>
-            <strong>Alert Active</strong>
+          <div className="alert alert-danger mt-3 mb-0 py-2 d-flex justify-content-between align-items-center" role="alert">
+            <div>
+              <i className="bi bi-exclamation-triangle-fill me-2"></i>
+              <strong>Alert Active</strong>
+            </div>
+            {onAcknowledgeAlert && (
+              <button
+                className="btn btn-sm btn-outline-danger"
+                onClick={handleAcknowledge}
+                title="Acknowledge alert"
+              >
+                <i className="bi bi-check-circle me-1"></i>
+                Acknowledge
+              </button>
+            )}
           </div>
         )}
       </div>

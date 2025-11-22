@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Container, Row, Col, Navbar, Nav, Button, Form, Spinner, Alert } from 'react-bootstrap';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { patientAPI, authAPI, sensorAPI, getErrorMessage } from '../services/api';
+import { patientAPI, authAPI, sensorAPI, alertAPI, getErrorMessage } from '../services/api';
 import { Patient } from '../types';
 import PatientCard from '../components/PatientCard';
 import { useSSE, SSESensorReadingEvent, SSEAlertTriggeredEvent, SSEAlertAcknowledgedEvent } from '../hooks/useSSE';
@@ -30,6 +30,9 @@ const DashboardPage = () => {
   
   // Active alerts: Set<patient_id>
   const [activeAlerts, setActiveAlerts] = useState<Set<string>>(new Set());
+  
+  // Alert IDs for each patient: Map<patient_id, alert_id>
+  const [patientAlertIds, setPatientAlertIds] = useState<Map<string, number>>(new Map());
 
   // SSE Connection for real-time updates
   const { connectionState, reconnect } = useSSE({
@@ -49,18 +52,37 @@ const DashboardPage = () => {
       });
     },
     onAlertTriggered: (event: SSEAlertTriggeredEvent) => {
-      // Add patient to active alerts
+      // Add patient to active alerts and track alert ID
+      const { patient_id, alert_id } = event.data;
       setActiveAlerts((prev) => {
         const newSet = new Set(prev);
-        newSet.add(event.data.patient_id);
+        newSet.add(patient_id);
         return newSet;
+      });
+      setPatientAlertIds((prev) => {
+        const newMap = new Map(prev);
+        newMap.set(patient_id, alert_id);
+        return newMap;
       });
       console.log('Alert triggered:', event.data.message);
     },
     onAlertAcknowledged: (event: SSEAlertAcknowledgedEvent) => {
-      // Note: We'd need patient_id in the event to remove from activeAlerts
-      // For now, we'll keep alerts in the set until page refresh
-      console.log('Alert acknowledged:', event.data);
+      // Remove patient from active alerts when acknowledged
+      // PL-001 fix: backend now includes patient_id in this event
+      const { patient_id } = event.data;
+      if (patient_id) {
+        setActiveAlerts((prev) => {
+          const newSet = new Set(prev);
+          newSet.delete(patient_id);
+          return newSet;
+        });
+        setPatientAlertIds((prev) => {
+          const newMap = new Map(prev);
+          newMap.delete(patient_id);
+          return newMap;
+        });
+        console.log('Alert acknowledged for patient:', patient_id);
+      }
     },
     onConnected: () => {
       console.log('SSE connected - receiving real-time updates');
@@ -152,6 +174,26 @@ const DashboardPage = () => {
 
   const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setSortBy(e.target.value as SortOption);
+  };
+
+  const handleAcknowledgeAlert = async (patientId: string) => {
+    try {
+      // Get the alert_id for this patient
+      const alertId = patientAlertIds.get(patientId);
+      if (!alertId) {
+        console.warn('No alert ID found for patient:', patientId);
+        return;
+      }
+
+      // Call the API to acknowledge the alert
+      await alertAPI.acknowledgeAlert(alertId);
+      
+      // The SSE event will handle removing from activeAlerts
+      console.log('Alert acknowledged successfully for patient:', patientId);
+    } catch (err) {
+      console.error('Failed to acknowledge alert:', err);
+      // Could show a toast notification here
+    }
   };
 
   return (
@@ -277,6 +319,7 @@ const DashboardPage = () => {
                     latestReading={reading}
                     hasActiveAlert={hasAlert}
                     onClick={() => console.log('Patient clicked:', patient.patient_id)}
+                    onAcknowledgeAlert={handleAcknowledgeAlert}
                   />
                 </Col>
               );
