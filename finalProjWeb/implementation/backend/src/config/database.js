@@ -15,15 +15,18 @@ const pool = mysql.createPool({
   keepAliveInitialDelay: 0
 });
 
-// Test connection (non-blocking for development)
+// Test connection
+// In containerized environment with health checks, database will always be available
+// If connection fails, it's a critical error that should stop the application
 pool.getConnection()
   .then(connection => {
-    logger.info('Database connection established');
+    logger.info('Database connection established successfully');
     connection.release();
   })
   .catch(err => {
-    logger.warn('Database connection failed (continuing without database):', err.message);
-    logger.warn('Application will start but database operations will fail until connection is established');
+    logger.error('Failed to connect to database:', err.message);
+    logger.error('Database connection is required. Exiting...');
+    process.exit(1);
   });
 
 module.exports = pool;

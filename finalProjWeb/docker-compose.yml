@@ -15,8 +15,8 @@ services:
       - "3306:3306"
     volumes:
       - db-data:/var/lib/mysql
-      - ./implementation/backend/database/init:/docker-entrypoint-initdb.d:ro
-      - ./implementation/backend/database/seed:/docker-entrypoint-seed.d:ro
+      - ./implementation/backend/database/init/01-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./implementation/backend/database/seed/02-seed-data.sql:/docker-entrypoint-initdb.d/02-seed-data.sql:ro
     networks:
       - iot-network
     healthcheck:
@@ -65,7 +65,7 @@ services:
     container_name: iot-dashboard-frontend
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8080:80"
     depends_on:
       - backend
     networks:

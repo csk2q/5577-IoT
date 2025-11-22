@@ -264,8 +264,9 @@ DELIMITER ;
 -- ============================================================================
 
 -- Fast lookup for active patients with recent readings
-CREATE INDEX idx_active_patients_recent ON sensor_readings(patient_id, timestamp DESC) 
-    WHERE timestamp > DATE_SUB(NOW(), INTERVAL 1 HOUR);
+-- Note: Partial indexes with WHERE clause not supported in MySQL
+-- Using standard composite index instead
+CREATE INDEX idx_active_patients_recent ON sensor_readings(patient_id, timestamp DESC);
 
 -- Fast alert queries for dashboard
 CREATE INDEX idx_unacknowledged_alerts ON alerts(patient_id, acknowledged, triggered_at DESC);
