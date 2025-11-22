@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Container, Row, Col, Navbar, Nav, Button, Form, Spinner, Alert } from 'react-bootstrap';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { patientAPI, authAPI, getErrorMessage } from '../services/api';
+import { patientAPI, authAPI, sensorAPI, getErrorMessage } from '../services/api';
 import { Patient } from '../types';
 import PatientCard from '../components/PatientCard';
 import { useSSE, SSESensorReadingEvent, SSEAlertTriggeredEvent, SSEAlertAcknowledgedEvent } from '../hooks/useSSE';
@@ -74,6 +74,53 @@ const DashboardPage = () => {
   useEffect(() => {
     fetchPatients();
   }, [sortBy]);
+
+  // Fetch initial sensor data for all patients with sensors
+  useEffect(() => {
+    const fetchInitialSensorData = async () => {
+      // Wait for patients to load
+      if (patients.length === 0) return;
+
+      // Fetch last reading for each patient with a sensor
+      const fetchPromises = patients
+        .filter(p => p.sensor_id) // Only patients with assigned sensors
+        .map(async (patient) => {
+          try {
+            const response = await sensorAPI.getReadings(patient.sensor_id!, { limit: 1 });
+            if (response.readings && response.readings.length > 0) {
+              const reading = response.readings[0];
+              return {
+                sensor_id: patient.sensor_id!,
+                reading: {
+                  oxygen_level: reading.oxygen_level || 0,
+                  heart_rate: reading.heart_rate || 0,
+                  temperature: reading.temperature || 0,
+                  timestamp: reading.timestamp
+                }
+              };
+            }
+          } catch (err) {
+            console.warn(`Failed to fetch initial reading for sensor ${patient.sensor_id}:`, err);
+          }
+          return null;
+        });
+
+      const results = await Promise.all(fetchPromises);
+      
+      // Update sensor data map with initial readings
+      setSensorData((prev) => {
+        const newMap = new Map(prev);
+        results.forEach(result => {
+          if (result) {
+            newMap.set(result.sensor_id, result.reading);
+          }
+        });
+        return newMap;
+      });
+    };
+
+    fetchInitialSensorData();
+  }, [patients]); // Re-fetch when patient list changes
 
   const fetchPatients = async () => {
     try {

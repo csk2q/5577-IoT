@@ -44,8 +44,9 @@ export interface Patient {
 export interface SensorReading {
   reading_id: number;
   sensor_id: string;
-  oxygen_level: number;
+  oxygen_level: number | null;
   heart_rate: number;
+  temperature: number | null;
   timestamp: string;
 }
 
