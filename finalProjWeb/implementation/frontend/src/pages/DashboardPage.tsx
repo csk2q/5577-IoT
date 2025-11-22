@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { patientAPI, authAPI, getErrorMessage } from '../services/api';
 import { Patient } from '../types';
+import PatientCard from '../components/PatientCard';
 
 type SortOption = 'room_number' | 'name' | 'patient_id';
 
@@ -141,24 +142,14 @@ const DashboardPage = () => {
           <Row className="g-3">
             {patients.map((patient) => (
               <Col key={patient.patient_id} xs={12} sm={6} lg={4} xl={3}>
-                <div className="card h-100 shadow-sm">
-                  <div className="card-body">
-                    <h6 className="card-title mb-1">{patient.name}</h6>
-                    <p className="text-muted small mb-2">
-                      Room: {patient.room_number} | ID: {patient.patient_id}
-                    </p>
-                    <div className="mb-2">
-                      <span className="badge bg-secondary">
-                        Sensor: {patient.sensor_id || 'Not Assigned'}
-                      </span>
-                    </div>
-                    <div className="text-center py-3">
-                      <p className="text-muted mb-0">
-                        <small>Patient card implementation in progress</small>
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                <PatientCard
+                  patient={patient}
+                  // TODO: Pass latestReading from SSE or API
+                  // latestReading={sensorData[patient.sensor_id]}
+                  // TODO: Pass hasActiveAlert from alert state
+                  // hasActiveAlert={activeAlerts.has(patient.patient_id)}
+                  onClick={() => console.log('Patient clicked:', patient.patient_id)}
+                />
               </Col>
             ))}
           </Row>
