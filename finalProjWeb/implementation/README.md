@@ -14,10 +14,26 @@ implementation/
 
 ## Quick Start
 
-### Prerequisites
-- Node.js 18+ LTS
-- MySQL 8+
-- npm or yarn
+### Docker (Recommended)
+
+**Prerequisites:** Docker and Docker Compose installed
+
+```bash
+# From project root
+cp .env.example .env
+docker-compose up -d
+```
+
+Access at:
+- Frontend: http://localhost
+- Backend API: http://localhost:3000
+- Database: localhost:3306
+
+See [DOCKER.md](../DOCKER.md) for detailed Docker documentation.
+
+### Local Development (Without Docker)
+
+**Prerequisites:** Node.js 18+ LTS, MySQL 8+, npm or yarn
 
 ### Backend Setup
 ```bash
