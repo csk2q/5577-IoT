@@ -327,12 +327,23 @@ Does this timeline seem achievable?
 Building an IoT Nursing Station Dashboard to monitor patient vital signs (blood oxygen, heart rate) in real-time using ESP32 sensors. The system must support secure authentication, role-based access, real-time data visualization, and HIPAA-compliant data handling.
 
 ### Key Requirements
+
+#### Functional Requirements
 1. **Three user roles:** Nurses (monitor patients), System Admins (manage users), Patient Intake (add patients)
 2. **Secure authentication:** 6-digit employee ID + password, HIPAA-compliant encryption
 3. **Real-time dashboard:** Grid of patient cards with current readings and spark line graphs (last 20 readings)
 4. **Configurable alerts:** Per-patient thresholds for oxygen and heart rate with visual emphasis
 5. **Administration:** User management, patient intake, alert configuration
 6. **Data refresh:** Sensor readings every 5 seconds, support 20-30 patients (scalable to 50-100)
+
+#### Non-Functional Requirements
+1. **Containerization:** All components must run in Docker containers
+   - Backend API server in dedicated container
+   - Frontend web application in dedicated container
+   - MySQL database in dedicated container
+2. **Orchestration:** Complete system startable via Docker Compose with single command
+3. **Database Initialization:** Database container must include DDL scripts to create schema automatically on container startup
+4. **Data Pre-loading:** Support for pre-loading initial data into database during container initialization (data to be provided)
 
 ### Technical Decisions
 - **Frontend:** React + TypeScript + Bootstrap
@@ -341,6 +352,8 @@ Building an IoT Nursing Station Dashboard to monitor patient vital signs (blood 
 - **Security:** HTTPS, bcrypt, JWT, encrypted database, audit logging
 - **Charts:** Chart.js or Recharts for spark line graphs
 - **Testing:** Mock sensor framework to simulate ESP32 devices
+- **Deployment:** Docker containers orchestrated via Docker Compose
+- **Database Setup:** Automated schema creation and data initialization via Docker volumes
 
 ### Risks Identified
 1. Real-time performance with 30-50 patients
@@ -362,12 +375,17 @@ Building an IoT Nursing Station Dashboard to monitor patient vital signs (blood 
 - [ ] **Week 1:** Define API contracts and data models in collaboration with Backend Developer
 - [ ] **Week 1:** Document security architecture for HIPAA compliance
 - [ ] **Week 1:** Set up project repository structure and development environment guidelines
+- [ ] **Week 1:** Create Docker Compose configuration for orchestrating all containers
+- [ ] **Week 1:** Design container networking and volume strategy
 - [ ] **Ongoing:** Review code and ensure architectural consistency
 
 ### Senior Backend Developer
 - [ ] **Week 1:** Design MySQL database schema with encryption strategy
 - [ ] **Week 1:** Collaborate with Architect on API contract definition
 - [ ] **Week 1:** Set up Node.js project with Express, MySQL connection pooling
+- [ ] **Week 1:** Create Dockerfile for backend container
+- [ ] **Week 1:** Create DDL scripts for database schema initialization
+- [ ] **Week 1:** Create database seed scripts for initial data loading
 - [ ] **Week 1-2:** Implement authentication API (login, logout, session management)
 - [ ] **Week 1-2:** Implement user management API for system admin
 - [ ] **Week 2:** Implement patient management API
@@ -379,6 +397,8 @@ Building an IoT Nursing Station Dashboard to monitor patient vital signs (blood 
 ### Senior UI Developer
 - [ ] **Week 1:** Review API contracts and provide feedback
 - [ ] **Week 1:** Set up React + TypeScript + Bootstrap project structure
+- [ ] **Week 1:** Create Dockerfile for frontend container with nginx
+- [ ] **Week 1:** Configure nginx for serving React app and proxying API requests
 - [ ] **Week 1-2:** Implement authentication UI (login page, role-based routing)
 - [ ] **Week 2-3:** Implement nurse dashboard grid layout with patient cards
 - [ ] **Week 3:** Implement basic patient card component with current readings
