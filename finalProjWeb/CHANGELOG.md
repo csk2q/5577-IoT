@@ -7,7 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Week 3 Planning
+- Server-Sent Events (SSE) real-time streaming
+- Frontend dashboard with real-time updates
+- Mock sensor implementation
+- Full end-to-end testing
+
+## [0.2.0] - 2025-11-22 - Week 2 Backend APIs Complete
+
+### Added - Week 2 Backend APIs (19 REST Endpoints)
+
+#### Authentication API (3 endpoints)
+- POST /api/v1/auth/login - User authentication with JWT tokens
+- POST /api/v1/auth/refresh - Refresh expired access tokens
+- POST /api/v1/auth/logout - Invalidate refresh tokens
+
+#### User Management API (4 endpoints)
+- GET /api/v1/users - List all users (admin only)
+- POST /api/v1/users - Create new user (admin only)
+- PUT /api/v1/users/:employee_id/status - Enable/disable user (admin only)
+- POST /api/v1/users/password-reset-request - Initiate password reset
+
+#### Patient Management API (5 endpoints)
+- GET /api/v1/patients - List all active patients with latest readings
+- GET /api/v1/patients/:patient_id - Get patient details with thresholds
+- POST /api/v1/patients - Create new patient record (intake only)
+- PUT /api/v1/patients/:patient_id - Update patient information
+- POST /api/v1/patients/:patient_id/discharge - Discharge patient and unassign sensor
+
+#### Sensor Data API (3 endpoints)
+- POST /api/v1/sensors/data - Ingest sensor readings with automatic alert generation
+- POST /api/v1/sensors/alert - Receive button press and sensor offline alerts
+- GET /api/v1/sensors/:sensor_id/readings - Get historical readings with pagination
+
+#### Alert Management API (4 endpoints)
+- GET /api/v1/alerts - List alerts with filtering (patient_id, acknowledged status)
+- PATCH /api/v1/alerts/:alert_id/acknowledge - Acknowledge alert with user tracking
+- GET /api/v1/patients/:patient_id/thresholds - Get patient alert thresholds
+- PUT /api/v1/patients/:patient_id/thresholds - Update patient alert thresholds
+
+#### Backend Infrastructure
+- authController.js - JWT authentication with bcrypt password hashing
+- userController.js - User CRUD with role-based authorization
+- patientController.js - Patient lifecycle management
+- sensorController.js - Sensor data ingestion with automatic threshold checking
+- alertController.js - Alert management and threshold configuration
+- Authentication middleware with JWT verification and role checking
+- Error handling middleware with standardized error codes
+- Audit logging for all state-changing operations (HIPAA compliance)
+- Winston logger with file and console transports
+- Database connection pooling with health checks
+
+#### Testing & Quality
+- Comprehensive smoke test script (test-api.sh) with 26 automated tests
+- Color-coded test output (green pass, red fail)
+- Unique test data generation to prevent conflicts on repeated runs
+- 100% test pass rate across all implemented APIs
+- JSON response validation and error code verification
+
+#### Documentation
+- Week 2 Progress Review meeting documentation (Week2ProgressReview.md)
+- All personas (CTO, Architect, Backend Dev, Frontend Dev, Test Expert, DevOps)
+- Risk assessment and mitigation strategies
+- Action items and next phase planning
+- Technical demos and validation results
+
+### Added - Week 1 Docker Infrastructure
 - Docker containerization for all services (database, backend, frontend)
 - docker-compose.yml for orchestrating three-container architecture
 - MySQL database container with automatic schema initialization
@@ -119,15 +184,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Docker containerization added same day as CTO directive
 - Team ready to begin Week 2 implementation
 
-### Next Phase (Week 2)
-- Implement authentication API endpoints
-- Implement user management CRUD
-- Implement patient management CRUD
-- Implement sensor data ingestion API
-- Build login page UI
-- Build dashboard layout UI
-- Implement MockSensor class
-- Add seed data to database
+### Week 2 Achievements
+- **All backend APIs implemented and tested (100% complete)**
+- **19 REST endpoints across 5 API categories**
+- **26 automated smoke tests with 100% pass rate**
+- Automatic alert threshold checking on sensor data ingestion
+- Role-based access control for all protected endpoints
+- Comprehensive audit logging for HIPAA compliance
+- JWT authentication with refresh token support
+- Patient lifecycle management (admission, updates, discharge)
+- Alert acknowledgment workflow with user tracking
+- Configurable per-patient alert thresholds
+
+### Next Phase (Week 3)
+- Build login page UI (React component)
+- Build dashboard layout UI (patient cards, real-time display)
+- Implement API service layer (Axios client)
+- Implement MockSensor class for testing
+- Add Server-Sent Events (SSE) for real-time streaming
+- Implement EventSource client in frontend
+- Create event broadcaster service in backend
+- End-to-end integration testing
 
 ---
 
