@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { patientAPI, authAPI, sensorAPI, alertAPI, getErrorMessage } from '../services/api';
 import { Patient } from '../types';
 import PatientCard from '../components/PatientCard';
+import ErrorBoundary from '../components/ErrorBoundary';
 import { useSSE, SSESensorReadingEvent, SSEAlertTriggeredEvent, SSEAlertAcknowledgedEvent } from '../hooks/useSSE';
 
 type SortOption = 'room_number' | 'name' | 'patient_id';
@@ -314,13 +315,15 @@ const DashboardPage = () => {
               
               return (
                 <Col key={patient.patient_id} xs={12} sm={6} lg={4} xl={3}>
-                  <PatientCard
-                    patient={patient}
-                    latestReading={reading}
-                    hasActiveAlert={hasAlert}
-                    onClick={() => console.log('Patient clicked:', patient.patient_id)}
-                    onAcknowledgeAlert={handleAcknowledgeAlert}
-                  />
+                  <ErrorBoundary fallbackMessage={`Unable to display patient ${patient.name}. Please refresh.`}>
+                    <PatientCard
+                      patient={patient}
+                      latestReading={reading}
+                      hasActiveAlert={hasAlert}
+                      onClick={() => console.log('Patient clicked:', patient.patient_id)}
+                      onAcknowledgeAlert={handleAcknowledgeAlert}
+                    />
+                  </ErrorBoundary>
                 </Col>
               );
             })}
