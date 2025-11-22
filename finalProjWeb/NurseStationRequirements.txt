@@ -1,0 +1,56 @@
+This document defines the requirements for the nursing station application.
+
+Overview:
+The nursing station application is an IoT dashboard for a sensor product to monitor patient health.
+
+This project intends to create a hospital nurse station using IoT sensors. It will include vital 
+monitorings of blood oxygen levels and heart rate, as well as accept and display alerts based 
+on input from the digital button. This alert will be visible on the web interface as well as 
+through the RGB LED light to indicate to both the user monitoring and the user being monitored 
+that the alert was sent.
+
+UI: Web Interface with encrypted login credentials
+Data storage: Encrypted SQL database linked to live monitoring tables and graphs on the web interface
+Data collection: ESP32 utilizing all listed IoT Devices
+
+User scenarios:
+
+1. As a nurse I want to be able to securely log into the application so that the patient data kept private
+and only I can access it. I will enter my employee id, which is 6 digits, and a password, and the system will
+log me in.
+
+2. As a system admin I want to be able to security log into the application so that I can manage
+the users of the system and ensure that the system remains secure. I will enter my employee id, which is 6 digits
+and a password and the system will log me in.
+
+3. As a patient intake administrator I want to be able to securely log into the application so that the patient
+data is kept private and I am able to add new patients. I will enter my employee id, which is 6 digits, and a password, and the system will
+log me in.
+
+4. As a nurse I want to be able to see the patient dashboard so that I can monitor patient data. Only nurses
+can see the dashboard.
+
+5. As a system admin I want to be able to see the list of users in the system so that I can perform the following actions:
+a - Create new users.
+b - Disable a user.
+c - Enable a previously disabled user.
+d - Send a reset password email to a user.
+
+6. As a patient intake specialist I want to be able to see the patient intake screen so that I can add a new
+patient to the system. The data for the patient I will collect is:
+a - The patient name.
+b - The patient id.
+c - The id of the sensor assigned to the patient.
+d - The room number the patient is assigned to.
+
+7. As a nurse I want to be able to see the dashboard of patient sensor data. The dashboard is a grid of graphs
+for each patient. Each patient cell will contain the patient name, current reading of blood oxygen and heart rate
+as a number and a spark graph of the last 20 readings. The dashboard will, by default, order the patient dashboard
+by room number.
+
+8. As a nurse I want to be able to change the order of the dashboard so that I can better review the data. I can order
+the dashboard by room number, patient name, or patient id.
+
+9. As a nurse I want to be able to change set alert levels for oxygen level and heart rate so that I can respond
+to patient health problems. Each measurement must have a lower and uppper limit. If the measurement exceeds
+the range then the dashboard cell for that patient should be emphasized.
