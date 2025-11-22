@@ -10,21 +10,21 @@ SET CHARACTER SET utf8mb4;
 -- Default password for all users: "password123" (bcrypt hashed)
 -- ============================================================================
 
--- Note: In production, use bcrypt with salt rounds 10-12
--- Hash for "password123": $2b$10$rKJ5WzVLqVVqVVqVVqVVqeqVVqVVqVVqVVqVVqVVqVVqVVqVVqVVq
--- This is a placeholder - actual hash should be generated server-side
+-- Note: All users have the password "password123" for testing purposes
+-- In production, use bcrypt with salt rounds 10-12 and require password change on first login
+-- Bcrypt hash generated with 10 salt rounds
 
 INSERT INTO users (employee_id, password_hash, first_name, last_name, email, role, status) VALUES
 -- Admin user
-('100001', '$2b$10$YQ4wqVZVqVVqVVqVVqVVqeYvVVqVVqVVqVVqVVqVVqVVqVVqVVqVVq', 'Sarah', 'Johnson', 'sarah.johnson@hospital.com', 'admin', 'active'),
+('100001', '$2b$10$/6d4S8R.r/0saS5DsRWOWO7a9PigRCGrNe/ise1FwMi0Wt8VWYS3K', 'Sarah', 'Johnson', 'sarah.johnson@hospital.com', 'admin', 'active'),
 
 -- Nurse users
-('200001', '$2b$10$YQ4wqVZVqVVqVVqVVqVVqeYvVVqVVqVVqVVqVVqVVqVVqVVqVVqVVq', 'Michael', 'Chen', 'michael.chen@hospital.com', 'nurse', 'active'),
-('200002', '$2b$10$YQ4wqVZVqVVqVVqVVqVVqeYvVVqVVqVVqVVqVVqVVqVVqVVqVVqVVq', 'Jennifer', 'Martinez', 'jennifer.martinez@hospital.com', 'nurse', 'active'),
-('200003', '$2b$10$YQ4wqVZVqVVqVVqVVqVVqeYvVVqVVqVVqVVqVVqVVqVVqVVqVVqVVq', 'David', 'Williams', 'david.williams@hospital.com', 'nurse', 'active'),
+('200001', '$2b$10$/6d4S8R.r/0saS5DsRWOWO7a9PigRCGrNe/ise1FwMi0Wt8VWYS3K', 'Michael', 'Chen', 'michael.chen@hospital.com', 'nurse', 'active'),
+('200002', '$2b$10$/6d4S8R.r/0saS5DsRWOWO7a9PigRCGrNe/ise1FwMi0Wt8VWYS3K', 'Jennifer', 'Martinez', 'jennifer.martinez@hospital.com', 'nurse', 'active'),
+('200003', '$2b$10$/6d4S8R.r/0saS5DsRWOWO7a9PigRCGrNe/ise1FwMi0Wt8VWYS3K', 'David', 'Williams', 'david.williams@hospital.com', 'nurse', 'active'),
 
 -- Intake specialist
-('300001', '$2b$10$YQ4wqVZVqVVqVVqVVqVVqeYvVVqVVqVVqVVqVVqVVqVVqVVqVVqVVq', 'Emily', 'Davis', 'emily.davis@hospital.com', 'intake', 'active');
+('300001', '$2b$10$/6d4S8R.r/0saS5DsRWOWO7a9PigRCGrNe/ise1FwMi0Wt8VWYS3K', 'Emily', 'Davis', 'emily.davis@hospital.com', 'intake', 'active');
 
 -- ============================================================================
 -- PATIENTS - Create sample patients for testing

@@ -34,13 +34,13 @@ app.get('/health', (req, res) => {
   });
 });
 
-// API Routes (to be imported)
-// app.use('/api/v1/auth', require('./routes/auth.routes'));
-// app.use('/api/v1/users', require('./routes/user.routes'));
-// app.use('/api/v1/patients', require('./routes/patient.routes'));
-// app.use('/api/v1/sensors', require('./routes/sensor.routes'));
-// app.use('/api/v1/alerts', require('./routes/alert.routes'));
-// app.use('/api/v1/stream', require('./routes/stream.routes'));
+// API Routes
+app.use('/api/v1/auth', require('./routes/authRoutes'));
+// app.use('/api/v1/users', require('./routes/userRoutes'));
+// app.use('/api/v1/patients', require('./routes/patientRoutes'));
+// app.use('/api/v1/sensors', require('./routes/sensorRoutes'));
+// app.use('/api/v1/alerts', require('./routes/alertRoutes'));
+// app.use('/api/v1/stream', require('./routes/streamRoutes'));
 
 // 404 handler
 app.use((req, res) => {
