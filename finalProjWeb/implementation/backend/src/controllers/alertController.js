@@ -136,9 +136,12 @@ const acknowledgeAlert = async (req, res) => {
       });
     }
 
-    // Check if alert exists
+    // Check if alert exists and get patient info
     const [alerts] = await db.query(
-      'SELECT alert_id FROM alerts WHERE alert_id = ?',
+      `SELECT a.alert_id, p.patient_identifier as patient_id
+       FROM alerts a
+       JOIN patients p ON a.patient_id = p.patient_id
+       WHERE a.alert_id = ?`,
       [alert_id]
     );
 
@@ -151,6 +154,8 @@ const acknowledgeAlert = async (req, res) => {
         }
       });
     }
+
+    const patientId = alerts[0].patient_id;
 
     // Update alert
     await db.query(
@@ -168,11 +173,12 @@ const acknowledgeAlert = async (req, res) => {
       [alert_id]
     );
 
-    logger.info(`Alert ${alert_id} acknowledged by user ${req.user.employee_id}`);
+    logger.info(`Alert ${alert_id} acknowledged by user ${req.user.employee_id} for patient ${patientId}`);
 
-    // Broadcast alert acknowledgment to SSE clients
+    // Broadcast alert acknowledgment to SSE clients (includes patient_id for frontend state management)
     broadcastAlertAcknowledged({
       alert_id: parseInt(alert_id),
+      patient_id: patientId,
       acknowledged_by: req.user.employee_id,
       acknowledged_at: updatedAlerts[0].acknowledged_at
     });
