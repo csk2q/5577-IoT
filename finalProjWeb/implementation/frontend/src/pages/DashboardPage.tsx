@@ -1,11 +1,181 @@
-import { Container } from 'react-bootstrap';
+import { useState, useEffect } from 'react';
+import { Container, Row, Col, Navbar, Nav, Button, Form, Spinner, Alert } from 'react-bootstrap';
+import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { patientAPI, authAPI, getErrorMessage } from '../services/api';
+import { Patient } from '../types';
+
+type SortOption = 'room_number' | 'name' | 'patient_id';
 
 const DashboardPage = () => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('room_number');
+
+  // Fetch patients on mount and when sort changes
+  useEffect(() => {
+    fetchPatients();
+  }, [sortBy]);
+
+  const fetchPatients = async () => {
+    try {
+      setLoading(true);
+      setError('');
+      const response = await patientAPI.getPatients({
+        status: 'active',
+        sort: sortBy,
+        limit: 100
+      });
+      setPatients(response.items);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await authAPI.logout();
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      logout();
+      navigate('/login');
+    }
+  };
+
+  const handleSortChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSortBy(e.target.value as SortOption);
+  };
+
   return (
-    <Container fluid className="mt-3">
-      <h1>Patient Dashboard</h1>
-      <p>Dashboard to be implemented by UI Developer</p>
-    </Container>
+    <div className="min-vh-100 bg-light">
+      {/* Navigation Bar */}
+      <Navbar bg="primary" variant="dark" className="shadow-sm">
+        <Container fluid>
+          <Navbar.Brand>
+            <strong>IoT Nursing Station</strong>
+          </Navbar.Brand>
+          <Nav className="ms-auto align-items-center">
+            <Nav.Item className="text-light me-3">
+              <small>
+                <strong>{user?.role?.toUpperCase()}</strong> | Employee ID: {user?.employee_id}
+              </small>
+            </Nav.Item>
+            <Button variant="outline-light" size="sm" onClick={handleLogout}>
+              Logout
+            </Button>
+          </Nav>
+        </Container>
+      </Navbar>
+
+      {/* Main Content */}
+      <Container fluid className="py-4">
+        {/* Header and Controls */}
+        <Row className="mb-4">
+          <Col md={6}>
+            <h2 className="mb-0">Patient Monitoring Dashboard</h2>
+            <small className="text-muted">Real-time vital signs monitoring</small>
+          </Col>
+          <Col md={6} className="text-md-end">
+            <Form.Group className="d-inline-block">
+              <Form.Label className="me-2 mb-0">
+                <small><strong>Sort by:</strong></small>
+              </Form.Label>
+              <Form.Select 
+                size="sm" 
+                value={sortBy} 
+                onChange={handleSortChange}
+                style={{ width: 'auto', display: 'inline-block' }}
+              >
+                <option value="room_number">Room Number</option>
+                <option value="name">Patient Name</option>
+                <option value="patient_id">Patient ID</option>
+              </Form.Select>
+            </Form.Group>
+            <Button 
+              variant="outline-primary" 
+              size="sm" 
+              className="ms-2"
+              onClick={fetchPatients}
+            >
+              <i className="bi bi-arrow-clockwise"></i> Refresh
+            </Button>
+          </Col>
+        </Row>
+
+        {/* Loading State */}
+        {loading && (
+          <div className="text-center py-5">
+            <Spinner animation="border" variant="primary" />
+            <p className="mt-3 text-muted">Loading patients...</p>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <Alert variant="danger" dismissible onClose={() => setError('')}>
+            <Alert.Heading>Error Loading Patients</Alert.Heading>
+            <p>{error}</p>
+            <Button variant="outline-danger" size="sm" onClick={fetchPatients}>
+              Try Again
+            </Button>
+          </Alert>
+        )}
+
+        {/* Empty State */}
+        {!loading && !error && patients.length === 0 && (
+          <Alert variant="info">
+            <Alert.Heading>No Active Patients</Alert.Heading>
+            <p>There are currently no active patients assigned to sensors.</p>
+          </Alert>
+        )}
+
+        {/* Patient Grid */}
+        {!loading && !error && patients.length > 0 && (
+          <Row className="g-3">
+            {patients.map((patient) => (
+              <Col key={patient.patient_id} xs={12} sm={6} lg={4} xl={3}>
+                <div className="card h-100 shadow-sm">
+                  <div className="card-body">
+                    <h6 className="card-title mb-1">{patient.name}</h6>
+                    <p className="text-muted small mb-2">
+                      Room: {patient.room_number} | ID: {patient.patient_id}
+                    </p>
+                    <div className="mb-2">
+                      <span className="badge bg-secondary">
+                        Sensor: {patient.sensor_id || 'Not Assigned'}
+                      </span>
+                    </div>
+                    <div className="text-center py-3">
+                      <p className="text-muted mb-0">
+                        <small>Patient card implementation in progress</small>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </Col>
+            ))}
+          </Row>
+        )}
+
+        {/* Footer Info */}
+        <Row className="mt-4">
+          <Col className="text-center">
+            <small className="text-muted">
+              {!loading && patients.length > 0 && (
+                <>Monitoring {patients.length} active patient{patients.length !== 1 ? 's' : ''}</>
+              )}
+            </small>
+          </Col>
+        </Row>
+      </Container>
+    </div>
   );
 };
 

@@ -170,3 +170,67 @@ export interface SSEEvent {
   message?: string;
   timestamp?: string;
 }
+
+// ============================================================================
+// API Request/Response Types
+// ============================================================================
+
+/**
+ * Login request
+ */
+export interface LoginRequest {
+  employee_id: string;
+  password: string;
+}
+
+/**
+ * Login response
+ */
+export interface LoginResponse {
+  token: string;
+  expiresIn: number;
+  user: {
+    user_id: number;
+    employee_id: string;
+    role: UserRole;
+  };
+}
+
+/**
+ * Create user request
+ */
+export interface CreateUserRequest {
+  employee_id: string;
+  password: string;
+  role: UserRole;
+}
+
+/**
+ * Create patient request
+ */
+export interface CreatePatientRequest {
+  patient_identifier: string;
+  first_name: string;
+  last_name: string;
+  date_of_birth?: string;
+  room_number: string;
+  sensor_id?: string;
+}
+
+/**
+ * Update thresholds request
+ */
+export interface UpdateThresholdsRequest {
+  heart_rate?: {
+    lower_limit: number;
+    upper_limit: number;
+  };
+  blood_oxygen?: {
+    lower_limit: number;
+    upper_limit: number;
+  };
+  temperature?: {
+    lower_limit: number;
+    upper_limit: number;
+  };
+}
