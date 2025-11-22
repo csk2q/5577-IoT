@@ -40,7 +40,7 @@ app.use('/api/v1/users', require('./routes/userRoutes'));
 app.use('/api/v1/patients', require('./routes/patientRoutes'));
 app.use('/api/v1/sensors', require('./routes/sensorRoutes'));
 app.use('/api/v1/alerts', require('./routes/alertRoutes').alertRoutes);
-// app.use('/api/v1/stream', require('./routes/streamRoutes'));
+app.use('/api/v1/stream', require('./routes/sseRoutes').router);
 
 // 404 handler
 app.use((req, res) => {

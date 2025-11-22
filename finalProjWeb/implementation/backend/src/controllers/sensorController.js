@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const logger = require('../utils/logger');
+const { broadcastSensorReading, broadcastAlert } = require('../routes/sseRoutes');
 
 /**
  * Sensor Data Controller
@@ -109,6 +110,16 @@ const ingestSensorData = async (req, res) => {
 
     logger.info(`Sensor reading ingested: ${sensor_id} (reading_id: ${reading_id})`);
 
+    // Broadcast sensor reading to connected SSE clients
+    broadcastSensorReading({
+      sensor_id,
+      patient_id: sensor.patient_identifier,
+      heart_rate,
+      oxygen_level,
+      temperature,
+      timestamp: readingTimestamp
+    });
+
     res.status(201).json({
       success: true,
       data: {
@@ -188,19 +199,28 @@ async function checkAlertThresholds(patient_id, patient_identifier, sensor_id, s
           }
           
           // Create alert
-          await db.query(
+          const [alertResult] = await db.query(
             `INSERT INTO alerts (patient_id, sensor_id, alert_type, severity, message, reading_value, threshold_value, acknowledged, triggered_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, false, NOW())`,
             [patient_id, sensor_id, alert_type, severity, message, value, 
              thresholdExceeded === 'lower' ? threshold.lower_limit : threshold.upper_limit]
           );
 
-          alerts.push({
+          const alertData = {
+            alert_id: alertResult.insertId,
             patient_id: patient_identifier,
-            metric: metricName,
-            value,
-            threshold_exceeded: thresholdExceeded
-          });
+            sensor_id: sensor_identifier,
+            alert_type,
+            severity,
+            message,
+            reading_value: value,
+            threshold_value: thresholdExceeded === 'lower' ? threshold.lower_limit : threshold.upper_limit
+          };
+
+          alerts.push(alertData);
+
+          // Broadcast alert to connected SSE clients
+          broadcastAlert(alertData);
 
           logger.warn(`Alert triggered: Patient ${patient_identifier}, ${metricName}=${value} (${thresholdExceeded} threshold)`);
         }

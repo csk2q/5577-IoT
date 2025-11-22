@@ -1,5 +1,6 @@
 const db = require('../config/database');
 const logger = require('../utils/logger');
+const { broadcastAlert, broadcastAlertAcknowledged } = require('../routes/sseRoutes');
 
 /**
  * Alert Management Controller
@@ -168,6 +169,13 @@ const acknowledgeAlert = async (req, res) => {
     );
 
     logger.info(`Alert ${alert_id} acknowledged by user ${req.user.employee_id}`);
+
+    // Broadcast alert acknowledgment to SSE clients
+    broadcastAlertAcknowledged({
+      alert_id: parseInt(alert_id),
+      acknowledged_by: req.user.employee_id,
+      acknowledged_at: updatedAlerts[0].acknowledged_at
+    });
 
     // Audit log
     await db.query(
