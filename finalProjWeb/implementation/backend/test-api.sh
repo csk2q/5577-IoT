@@ -307,6 +307,133 @@ else
 fi
 
 # ============================================================================
+# Sensor Data API Tests
+# ============================================================================
+echo -e "\n${YELLOW}Testing Sensor Data API...${NC}\n"
+
+# Test 19: Ingest sensor data
+echo "Test 19: Ingest Sensor Data"
+INGEST_RESPONSE=$(curl -s -X POST "$BASE_URL/sensors/data" \
+    -H "Content-Type: application/json" \
+    -d '{
+        "sensor_id": "ESP32-VS-001",
+        "oxygen_level": 97.5,
+        "heart_rate": 75,
+        "temperature": 36.8
+    }')
+
+if echo "$INGEST_RESPONSE" | grep -q '"reading_id"'; then
+    print_test "Ingest sensor data" "PASS"
+else
+    print_test "Ingest sensor data" "FAIL"
+fi
+
+# Test 20: Get sensor readings
+echo "Test 20: Get Sensor Readings"
+READINGS_RESPONSE=$(curl -s -X GET "$BASE_URL/sensors/ESP32-VS-001/readings?limit=5" \
+    -H "Authorization: Bearer $NURSE_TOKEN")
+
+if echo "$READINGS_RESPONSE" | grep -q '"readings"'; then
+    print_test "Get sensor readings" "PASS"
+else
+    print_test "Get sensor readings" "FAIL"
+fi
+
+# Test 21: Send button press alert
+echo "Test 21: Send Button Press Alert"
+BUTTON_ALERT_RESPONSE=$(curl -s -X POST "$BASE_URL/sensors/alert" \
+    -H "Content-Type: application/json" \
+    -d '{
+        "sensor_id": "ESP32-VS-001",
+        "alert_type": "button_pressed"
+    }')
+
+if echo "$BUTTON_ALERT_RESPONSE" | grep -q '"alert_id"'; then
+    print_test "Send button press alert" "PASS"
+else
+    print_test "Send button press alert" "FAIL"
+fi
+
+# Test 22: Invalid sensor data
+echo "Test 22: Invalid Sensor Data"
+INVALID_SENSOR_RESPONSE=$(curl -s -X POST "$BASE_URL/sensors/data" \
+    -H "Content-Type: application/json" \
+    -d '{
+        "sensor_id": "ESP32-VS-001",
+        "heart_rate": 500
+    }')
+
+if echo "$INVALID_SENSOR_RESPONSE" | grep -q 'INVALID_SENSOR_DATA'; then
+    print_test "Invalid sensor data rejection" "PASS"
+else
+    print_test "Invalid sensor data rejection" "FAIL"
+fi
+
+# ============================================================================
+# Alert Management API Tests
+# ============================================================================
+echo -e "\n${YELLOW}Testing Alert Management API...${NC}\n"
+
+# Test 23: Get all alerts
+echo "Test 23: Get All Alerts"
+ALERTS_RESPONSE=$(curl -s -X GET "$BASE_URL/alerts?acknowledged=false" \
+    -H "Authorization: Bearer $NURSE_TOKEN")
+
+if echo "$ALERTS_RESPONSE" | grep -q '"items"'; then
+    print_test "Get all alerts" "PASS"
+    # Extract an alert ID for acknowledgment test
+    ALERT_ID=$(echo "$ALERTS_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data['data']['items'][0]['alert_id'] if len(data['data']['items']) > 0 else '')" 2>/dev/null || echo "")
+else
+    print_test "Get all alerts" "FAIL"
+fi
+
+# Test 24: Acknowledge alert
+echo "Test 24: Acknowledge Alert"
+if [ -n "$ALERT_ID" ]; then
+    ACK_RESPONSE=$(curl -s -X PATCH "$BASE_URL/alerts/$ALERT_ID/acknowledge" \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $NURSE_TOKEN" \
+        -d '{"acknowledged": true}')
+    
+    if echo "$ACK_RESPONSE" | grep -q '"acknowledged":true'; then
+        print_test "Acknowledge alert" "PASS"
+    else
+        print_test "Acknowledge alert" "FAIL"
+    fi
+else
+    print_test "Acknowledge alert" "SKIP"
+fi
+
+# Test 25: Get patient thresholds
+echo "Test 25: Get Patient Thresholds"
+THRESHOLDS_RESPONSE=$(curl -s -X GET "$BASE_URL/patients/P-2025-001/thresholds" \
+    -H "Authorization: Bearer $NURSE_TOKEN")
+
+if echo "$THRESHOLDS_RESPONSE" | grep -q '"thresholds"'; then
+    print_test "Get patient thresholds" "PASS"
+else
+    print_test "Get patient thresholds" "FAIL"
+fi
+
+# Test 26: Update patient thresholds
+echo "Test 26: Update Patient Thresholds"
+UPDATE_THRESHOLDS_RESPONSE=$(curl -s -X PUT "$BASE_URL/patients/P-2025-001/thresholds" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $NURSE_TOKEN" \
+    -d '{
+        "heart_rate": {
+            "lower_limit": 55,
+            "upper_limit": 105
+        }
+    }')
+
+if echo "$UPDATE_THRESHOLDS_RESPONSE" | grep -q '"thresholds"'; then
+    print_test "Update patient thresholds" "PASS"
+else
+    print_test "Update patient thresholds" "FAIL"
+fi
+
+# ============================================================================
 # Summary
 # ============================================================================
 echo -e "\n${YELLOW}======================================${NC}"
