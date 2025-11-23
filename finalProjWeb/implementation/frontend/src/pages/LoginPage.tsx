@@ -36,8 +36,20 @@ const LoginPage = () => {
       // Update auth context (which also stores in localStorage)
       login(response.token, response.user as any);
       
-      // Redirect to dashboard
-      navigate('/dashboard');
+      // Redirect based on user role
+      switch (response.user.role) {
+        case 'admin':
+          navigate('/admin');
+          break;
+        case 'intake':
+          navigate('/intake');
+          break;
+        case 'nurse':
+          navigate('/dashboard');
+          break;
+        default:
+          navigate('/dashboard');
+      }
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {

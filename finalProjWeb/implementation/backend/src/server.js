@@ -11,16 +11,44 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(helmet()); // Security headers
-app.use(cors({ origin: process.env.CORS_ORIGIN || 'http://localhost:5173' }));
+
+// CORS configuration with detailed logging
+const allowedOrigins = [
+  'http://localhost:5173', // Vite dev server
+  'http://localhost:8080', // Docker nginx
+  'http://127.0.0.1:8080', // Docker nginx alternate
+];
+
+app.use(cors({ 
+  origin: function(origin, callback) {
+    logger.info(`CORS request from origin: ${origin || 'none'}`);
+    // Allow requests with no origin (like mobile apps, curl, Postman)
+    if (!origin) {
+      logger.info('CORS: Allowing request with no origin');
+      return callback(null, true);
+    }
+    if (allowedOrigins.indexOf(origin) !== -1 || (process.env.CORS_ORIGIN && origin === process.env.CORS_ORIGIN)) {
+      logger.info(`CORS: Allowing origin ${origin}`);
+      callback(null, true);
+    } else {
+      logger.warn(`CORS: Blocking origin ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true 
+}));
+
 app.use(compression()); // Compress responses
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Request logging
+// Request logging with more details
 app.use((req, res, next) => {
   logger.info(`${req.method} ${req.path}`, {
     ip: req.ip,
-    userAgent: req.get('user-agent')
+    origin: req.get('origin') || 'none',
+    userAgent: req.get('user-agent'),
+    timestamp: new Date().toISOString()
   });
   next();
 });
