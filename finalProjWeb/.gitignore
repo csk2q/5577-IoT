@@ -60,6 +60,11 @@ dump.sql
 *.temp
 .cache/
 
+# Process ID files
+*.pid
+.pids/
+**/.pids/
+
 # OS generated files
 Thumbs.db
 ehthumbs.db
