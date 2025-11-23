@@ -6,41 +6,386 @@
 
 ---
 
-## Pre-Demo Setup (5 minutes before)
+## Initial Setup (First-Time Installation)
 
-### 1. Start Infrastructure
+**⏱️ Time Required:** ~5 minutes  
+**When to do this:** Before the demo, or when setting up on a new machine
+
+### Prerequisites
+
+Ensure the following are installed on your system:
+- **Docker Desktop** (v20.10+) - [Download](https://www.docker.com/products/docker-desktop)
+- **Git** (v2.30+) - [Download](https://git-scm.com/downloads)
+- **Node.js** (v18+) - Optional, only needed if running mock sensors - [Download](https://nodejs.org/)
+
+Verify installations:
 ```bash
-cd /Users/wortcook/Workspace/5577-IoT/finalProjWeb
-docker-compose up -d
+docker --version          # Should show: Docker version 20.10+
+docker-compose --version  # Should show: Docker Compose version v2.0+
+git --version            # Should show: git version 2.30+
+node --version           # Should show: v18.0+ (optional)
 ```
 
-Wait for all containers to be healthy:
-- ✅ Database: `iot-dashboard-db` (healthy)
-- ✅ Backend: `iot-dashboard-backend` (healthy)
-- ✅ Frontend: `iot-dashboard-frontend` (running)
+---
 
-### 2. Start Mock Sensors
+### Step 1: Clone Repository from GitHub
+
 ```bash
+# Clone the repository
+git clone https://github.com/csk2q/5577-IoT.git
+
+# Navigate to project directory
+cd 5577-IoT/finalProjWeb
+
+# Verify you're in the correct directory
+ls -la
+# You should see: docker-compose.yml, implementation/, DEMO_SCRIPT.md, etc.
+```
+
+**✅ Success Check:** You should see the project files listed.
+
+---
+
+### Step 2: Build and Start the System
+
+```bash
+# Build and start all containers (database, backend, frontend)
+docker-compose up -d --build
+
+# This will:
+# 1. Build the backend API server (Node.js)
+# 2. Build the frontend web application (React)
+# 3. Pull MySQL 8.0 database image
+# 4. Create network and volumes
+# 5. Start all services in detached mode
+```
+
+**⏱️ First Build Time:** 2-3 minutes (subsequent builds are faster)
+
+**✅ Success Check:** All containers should be running:
+```bash
+docker-compose ps
+
+# Expected output:
+# NAME                        STATUS              PORTS
+# iot-dashboard-backend       Up (healthy)        0.0.0.0:3000->3000/tcp
+# iot-dashboard-db            Up (healthy)        0.0.0.0:3306->3306/tcp
+# iot-dashboard-frontend      Up                  0.0.0.0:8080->80/tcp
+```
+
+---
+
+### Step 3: Verify System Health
+
+```bash
+# Check backend health endpoint
+curl http://localhost:3000/health
+
+# Expected output: {"status":"ok","timestamp":"..."}
+```
+
+```bash
+# Check database connection
+docker exec iot-dashboard-db mysql -uroot -prootpassword -e "SHOW DATABASES;"
+
+# Expected output should include: nurse_station_db
+```
+
+```bash
+# Access frontend in browser
+open http://localhost:8080
+# Or manually navigate to: http://localhost:8080
+
+# Expected: Login page should load with no errors
+```
+
+**✅ Success Check:**
+- ✅ Backend responds with `{"status":"ok"}`
+- ✅ Database shows `nurse_station_db`
+- ✅ Frontend login page loads
+- ✅ No console errors in browser (F12 → Console)
+
+---
+
+### Step 4: Verify Pre-Seeded Data
+
+The database is automatically seeded with test data on first startup:
+
+```bash
+# Check users exist
+docker exec iot-dashboard-db mysql -uroot -prootpassword nurse_station_db \
+  -e "SELECT employee_id, role FROM users;"
+
+# Expected output:
+# employee_id | role
+# ------------|------
+# 100001      | admin
+# 200001      | nurse
+# 200002      | nurse
+# 200003      | nurse
+# 300001      | intake
+```
+
+```bash
+# Check patients exist
+docker exec iot-dashboard-db mysql -uroot -prootpassword nurse_station_db \
+  -e "SELECT patient_identifier, room_number FROM patients WHERE status='active';"
+
+# Expected output: 5-10 active patients with room numbers
+```
+
+**✅ Success Check:**
+- ✅ At least 1 admin user (100001)
+- ✅ At least 2 nurse users (200001, 200002)
+- ✅ At least 1 intake user (300001)
+- ✅ At least 5 active patients
+
+---
+
+### Step 5: Test Login
+
+```bash
+# Test admin login via API
+curl -X POST http://localhost:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"employee_id": "100001", "password": "password123"}'
+
+# Expected output: {"success":true,"data":{"token":"eyJ...","expiresIn":28800,...}}
+```
+
+**Or test via browser:**
+1. Navigate to http://localhost:8080
+2. Enter credentials:
+   - Employee ID: `100001`
+   - Password: `password123`
+3. Click "Login"
+4. ✅ **Verify:** Redirected to Admin Dashboard
+
+**✅ Success Check:** Login successful, dashboard loads
+
+---
+
+### Step 6: Start Mock Sensors (Optional for Real-Time Demo)
+
+Mock sensors simulate IoT devices sending vital sign data:
+
+```bash
+# Navigate to mock sensors directory
 cd implementation/mock-sensors
+
+# Install dependencies (first time only)
+npm install
+
+# Start 5 mock sensors
+./demo-5-sensors.sh start
+
+# Verify sensors are running
+./demo-5-sensors.sh status
+
+# Expected output:
+# Sensor 1 (ESP32-VS-001): Running (PID: 12345)
+# Sensor 2 (ESP32-VS-002): Running (PID: 12346)
+# Sensor 3 (ESP32-VS-003): Running (PID: 12347)
+# Sensor 6 (ESP32-VS-006): Running (PID: 12348)
+# Sensor 7 (ESP32-VS-007): Running (PID: 12349)
+# Status: 5/5 sensors running
+```
+
+**✅ Success Check:** All 5 sensors report "Running"
+
+**Return to project root:**
+```bash
+cd ../..
+```
+
+---
+
+### Step 7: Verify Real-Time Data Flow
+
+1. **Open browser** to http://localhost:8080
+2. **Login as nurse:**
+   - Employee ID: `200001`
+   - Password: `password123`
+3. **Observe dashboard:**
+   - ✅ Connection status: **"Live"** (green badge, top-right)
+   - ✅ Patient cards show vitals updating every 5 seconds
+   - ✅ Timestamps refresh automatically
+   - ✅ Some patients may show warning/critical badges
+
+**✅ Success Check:**
+- ✅ Dashboard shows 5+ patient cards
+- ✅ Vital signs update in real-time (watch for ~5 seconds)
+- ✅ No connection errors
+- ✅ Status badges show appropriate colors (green/yellow/red)
+
+---
+
+### System is Now Ready for Demo! 🎉
+
+**What's Running:**
+- ✅ **Database** (MySQL 8.0) - Port 3306
+- ✅ **Backend API** (Node.js/Express) - Port 3000
+- ✅ **Frontend** (React/Nginx) - Port 8080
+- ✅ **Mock Sensors** (5 devices) - Generating real-time data
+
+**Next Steps:**
+- Proceed to [Pre-Demo Setup](#pre-demo-setup-5-minutes-before) section below
+- Or begin demo immediately with [Demo Flow](#demo-flow-10-minutes)
+
+---
+
+### Stopping the System
+
+When demo is complete:
+
+```bash
+# Stop mock sensors
+cd implementation/mock-sensors
+./demo-5-sensors.sh stop
+
+# Return to project root
+cd ../..
+
+# Stop all containers (preserves data)
+docker-compose down
+
+# Or stop and remove all data (fresh start next time)
+docker-compose down -v
+```
+
+---
+
+### Troubleshooting Initial Setup
+
+#### Issue: Docker containers won't start
+
+**Solution:**
+```bash
+# Check Docker is running
+docker ps
+
+# If error, start Docker Desktop application
+# Then retry: docker-compose up -d
+```
+
+---
+
+#### Issue: Port already in use (3000, 3306, or 8080)
+
+**Solution:**
+```bash
+# Check what's using the port
+lsof -i :3000  # or :3306 or :8080
+
+# Stop the conflicting service
+# Then retry: docker-compose up -d
+```
+
+---
+
+#### Issue: Database not seeded (no users/patients)
+
+**Solution:**
+```bash
+# Stop containers
+docker-compose down -v
+
+# Remove all volumes (fresh start)
+docker volume prune -f
+
+# Restart (will re-seed automatically)
+docker-compose up -d --build
+```
+
+---
+
+#### Issue: Mock sensors won't start
+
+**Solution:**
+```bash
+# Ensure Node.js is installed
+node --version  # Should show v18+
+
+# Install dependencies
+cd implementation/mock-sensors
+npm install
+
+# Try starting again
 ./demo-5-sensors.sh start
 ```
 
-Verify all 5 sensors running:
+---
+
+## Pre-Demo Setup (5 minutes before demo)
+
+**Note:** If you've just completed the [Initial Setup](#initial-setup-first-time-installation) section above, the system is already running and you can skip to Step 3.
+
+### 1. Verify Infrastructure is Running
+
+If you stopped the system after initial setup, restart it:
+
 ```bash
+cd /path/to/5577-IoT/finalProjWeb
+docker-compose up -d
+```
+
+Check container status:
+```bash
+docker-compose ps
+
+# All containers should show:
+# ✅ iot-dashboard-db       - Up (healthy)
+# ✅ iot-dashboard-backend  - Up (healthy)  
+# ✅ iot-dashboard-frontend - Up
+```
+
+### 2. Verify Mock Sensors are Running
+
+```bash
+cd implementation/mock-sensors
 ./demo-5-sensors.sh status
+```
+
+If sensors are not running, start them:
+```bash
+./demo-5-sensors.sh start
 ```
 
 Expected output: **5/5 sensors running** ✓
 
-### 3. Open Browser
+Return to project root:
+```bash
+cd ../..
+```
+
+### 3. Open Browser Tabs
 - Navigate to: **http://localhost:8080**
 - Open browser DevTools (F12) - Network tab to show SSE connection
 - Have a second browser tab ready for testing multiple users
 
-### 4. Pre-Demo Verification
-- ✅ Login page loads
-- ✅ No console errors
-- ✅ Backend health check: `curl http://localhost:3000/health`
+### 4. Pre-Demo Verification Checklist
+Run these quick checks before the CTO arrives:
+
+```bash
+# Backend health
+curl http://localhost:3000/health
+# Expected: {"status":"ok",...}
+
+# Container status  
+docker-compose ps | grep healthy
+# Expected: All containers show "healthy" or "Up"
+
+# Mock sensors
+cd implementation/mock-sensors && ./demo-5-sensors.sh status
+# Expected: 5/5 sensors running
+```
+
+**Browser Checks:**
+- ✅ Login page loads at http://localhost:8080
+- ✅ No console errors (F12 → Console tab)
+- ✅ Test login with `100001` / `password123` works
+
+**If any check fails,** refer to [Troubleshooting](#troubleshooting) section below.
 
 ---
 
