@@ -63,8 +63,8 @@ services:
       context: ./implementation/frontend
       dockerfile: Dockerfile
       args:
-        # Build-time argument: Frontend JS runs in browser, needs localhost
-        VITE_API_BASE_URL: http://localhost:3000/api/v1
+        # Use relative URL to work through nginx proxy (avoids CORS)
+        VITE_API_BASE_URL: /api/v1
     container_name: iot-dashboard-frontend
     restart: unless-stopped
     ports:

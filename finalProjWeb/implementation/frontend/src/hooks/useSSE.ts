@@ -75,6 +75,7 @@ export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'err
  */
 interface UseSSEOptions {
   url: string;
+  token?: string | null; // JWT token for authentication
   enabled?: boolean;
   onSensorReading?: (event: SSESensorReadingEvent) => void;
   onAlertTriggered?: (event: SSEAlertTriggeredEvent) => void;
@@ -113,13 +114,8 @@ interface UseSSEOptions {
 export function useSSE(options: UseSSEOptions) {
   const {
     url,
+    token,
     enabled = true,
-    onSensorReading,
-    onAlertTriggered,
-    onAlertAcknowledged,
-    onSensorStatus,
-    onConnected,
-    onError,
     reconnectInterval = 3000,
   } = options;
 
@@ -130,12 +126,50 @@ export function useSSE(options: UseSSEOptions) {
   const reconnectAttemptsRef = useRef(0);
 
   /**
+   * Store callbacks in refs to prevent unnecessary reconnections
+   * This is the recommended React pattern for event handlers in useEffect
+   * See: https://react.dev/learn/separating-events-from-effects
+   */
+  const callbacksRef = useRef({
+    onSensorReading: options.onSensorReading,
+    onAlertTriggered: options.onAlertTriggered,
+    onAlertAcknowledged: options.onAlertAcknowledged,
+    onSensorStatus: options.onSensorStatus,
+    onConnected: options.onConnected,
+    onError: options.onError,
+  });
+
+  // Update callback refs when they change (doesn't trigger reconnection)
+  useEffect(() => {
+    callbacksRef.current = {
+      onSensorReading: options.onSensorReading,
+      onAlertTriggered: options.onAlertTriggered,
+      onAlertAcknowledged: options.onAlertAcknowledged,
+      onSensorStatus: options.onSensorStatus,
+      onConnected: options.onConnected,
+      onError: options.onError,
+    };
+  });
+
+  /**
    * Connect to SSE endpoint
    */
   const connect = useCallback(() => {
+    console.log('[SSE] Connect called - enabled:', enabled, 'token:', token ? 'present' : 'missing');
+    
     if (!enabled) {
+      console.log('[SSE] Connection disabled, skipping');
       return;
     }
+
+    // Don't connect without authentication token
+    if (!token) {
+      console.warn('[SSE] Cannot connect without authentication token');
+      setConnectionState('disconnected');
+      return;
+    }
+    
+    console.log('[SSE] Starting connection...');
 
     // Close existing connection
     if (eventSourceRef.current) {
@@ -150,15 +184,35 @@ export function useSSE(options: UseSSEOptions) {
     setConnectionState('connecting');
 
     try {
-      // Determine full URL
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
-      const fullUrl = url.startsWith('http') ? url : `${apiBaseUrl}${url}`;
+      // Use relative URL to go through nginx proxy (avoids CORS issues)
+      // In production, nginx serves frontend and proxies /api/ to backend
+      let fullUrl = url.startsWith('http') ? url : `/api/v1${url}`;
+      
+      // Add token as query parameter (EventSource doesn't support custom headers)
+      if (token) {
+        const separator = fullUrl.includes('?') ? '&' : '?';
+        fullUrl = `${fullUrl}${separator}token=${encodeURIComponent(token)}`;
+      }
 
+      console.log('[SSE] Creating EventSource for:', fullUrl);
+      console.log('[SSE] Window location:', window.location.href);
+      console.log('[SSE] EventSource constructor exists:', typeof EventSource !== 'undefined');
+      
       const eventSource = new EventSource(fullUrl);
       eventSourceRef.current = eventSource;
+      
+      console.log('[SSE] EventSource created, readyState:', eventSource.readyState);
+      console.log('[SSE] EventSource url property:', eventSource.url);
+      
+      // Log state changes
+      setTimeout(() => {
+        console.log('[SSE] After 1s, readyState:', eventSource.readyState, 
+                    'CONNECTING=0, OPEN=1, CLOSED=2');
+      }, 1000);
 
       // Handle connection open
       eventSource.onopen = () => {
+        console.log('[SSE] Connection opened!');
         setConnectionState('connected');
         reconnectAttemptsRef.current = 0;
         console.log('[SSE] Connected to', fullUrl);
@@ -166,32 +220,36 @@ export function useSSE(options: UseSSEOptions) {
 
       // Handle incoming messages
       eventSource.onmessage = (event) => {
+        console.log('[SSE] Message received:', event.data);
         try {
           const parsedEvent: SSEEvent = JSON.parse(event.data);
+          console.log('[SSE] Parsed event type:', parsedEvent.type);
 
           // Route event to appropriate handler
           switch (parsedEvent.type) {
             case 'connected':
               setClientId(parsedEvent.clientId);
-              onConnected?.(parsedEvent);
+              setConnectionState('connected'); // Set connected state on first message
+              callbacksRef.current.onConnected?.(parsedEvent);
               console.log('[SSE] Connection confirmed, client ID:', parsedEvent.clientId);
               break;
 
             case 'sensor_reading':
-              onSensorReading?.(parsedEvent);
+              console.log('[SSE] Sensor reading event for:', parsedEvent.data.sensor_id);
+              callbacksRef.current.onSensorReading?.(parsedEvent);
               break;
 
             case 'alert_triggered':
-              onAlertTriggered?.(parsedEvent);
+              callbacksRef.current.onAlertTriggered?.(parsedEvent);
               console.log('[SSE] Alert triggered:', parsedEvent.data);
               break;
 
             case 'alert_acknowledged':
-              onAlertAcknowledged?.(parsedEvent);
+              callbacksRef.current.onAlertAcknowledged?.(parsedEvent);
               break;
 
             case 'sensor_status':
-              onSensorStatus?.(parsedEvent);
+              callbacksRef.current.onSensorStatus?.(parsedEvent);
               console.log('[SSE] Sensor status change:', parsedEvent.data);
               break;
 
@@ -205,9 +263,12 @@ export function useSSE(options: UseSSEOptions) {
 
       // Handle errors
       eventSource.onerror = (event) => {
-        console.error('[SSE] Connection error:', event);
+        console.error('[SSE] Connection error!');
+        console.error('[SSE] Error event:', event);
+        console.error('[SSE] EventSource readyState:', eventSource.readyState);
+        console.error('[SSE] Event target:', event.target);
         setConnectionState('error');
-        onError?.(event);
+        callbacksRef.current.onError?.(event);
 
         // Attempt reconnection with exponential backoff
         const maxAttempts = 10;
@@ -237,17 +298,7 @@ export function useSSE(options: UseSSEOptions) {
       console.error('[SSE] Failed to create EventSource:', error);
       setConnectionState('error');
     }
-  }, [
-    url,
-    enabled,
-    onSensorReading,
-    onAlertTriggered,
-    onAlertAcknowledged,
-    onSensorStatus,
-    onConnected,
-    onError,
-    reconnectInterval,
-  ]);
+  }, [url, token, enabled, reconnectInterval]); // Only stable dependencies - callbacks stored in ref
 
   /**
    * Disconnect from SSE endpoint
@@ -286,7 +337,7 @@ export function useSSE(options: UseSSEOptions) {
     return () => {
       disconnect();
     };
-  }, [enabled, connect, disconnect]);
+  }, [enabled, connect, disconnect]); // Now safe - connect/disconnect have stable dependencies
 
   return {
     connectionState,

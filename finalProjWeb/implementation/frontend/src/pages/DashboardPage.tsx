@@ -18,7 +18,7 @@ interface SensorReading {
 }
 
 const DashboardPage = () => {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const navigate = useNavigate();
   
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -38,7 +38,8 @@ const DashboardPage = () => {
   // SSE Connection for real-time updates
   const { connectionState, reconnect } = useSSE({
     url: '/stream/sensor-data',
-    enabled: true,
+    token, // Pass JWT token for authentication
+    enabled: !!token, // Only enable when we have a valid token
     onSensorReading: (event: SSESensorReadingEvent) => {
       // Update sensor data map
       setSensorData((prev) => {

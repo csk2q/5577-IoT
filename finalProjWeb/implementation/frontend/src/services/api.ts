@@ -5,7 +5,9 @@ import type {
   UpdateThresholdsRequest, PaginatedResponse, ApiResponse 
 } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api/v1';
+// Use relative URL to go through nginx proxy (avoids CORS issues)
+// In production/Docker, nginx serves frontend and proxies /api/ to backend
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 /**
  * Axios instance with default configuration

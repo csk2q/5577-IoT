@@ -46,7 +46,7 @@ const getPatients = async (req, res) => {
     );
     const total = countResult[0].total;
 
-    // Get patients with sensor info
+    // Get patients with sensor info and latest readings
     const [patients] = await db.query(
       `SELECT 
         p.patient_id,
@@ -55,9 +55,27 @@ const getPatients = async (req, res) => {
         p.room_number,
         s.sensor_identifier as sensor_id,
         p.status,
-        p.created_at
+        p.created_at,
+        sr.heart_rate,
+        sr.blood_oxygen_level,
+        sr.temperature,
+        sr.timestamp as last_reading_time
        FROM patients p
        LEFT JOIN sensors s ON s.patient_id = p.patient_id AND s.status = 'active'
+       LEFT JOIN (
+         SELECT 
+           sr1.sensor_id,
+           sr1.heart_rate,
+           sr1.blood_oxygen_level,
+           sr1.temperature,
+           sr1.timestamp
+         FROM sensor_readings sr1
+         INNER JOIN (
+           SELECT sensor_id, MAX(timestamp) as max_timestamp
+           FROM sensor_readings
+           GROUP BY sensor_id
+         ) sr2 ON sr1.sensor_id = sr2.sensor_id AND sr1.timestamp = sr2.max_timestamp
+       ) sr ON sr.sensor_id = s.sensor_id
        ${whereClause}
        ORDER BY ${sortMap[sortColumn]} ASC
        LIMIT ? OFFSET ?`,
@@ -75,7 +93,14 @@ const getPatients = async (req, res) => {
           room_number: p.room_number,
           sensor_id: p.sensor_id,
           status: p.status,
-          created_at: p.created_at
+          created_at: p.created_at,
+          // Include latest sensor readings if available
+          latest_reading: p.heart_rate || p.blood_oxygen_level || p.temperature ? {
+            heart_rate: p.heart_rate,
+            oxygen_level: p.blood_oxygen_level,
+            temperature: p.temperature,
+            timestamp: p.last_reading_time
+          } : null
         })),
         pagination: {
           page: parseInt(page),

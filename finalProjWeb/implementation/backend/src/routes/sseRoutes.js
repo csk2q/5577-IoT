@@ -6,41 +6,118 @@
  */
 
 const express = require('express');
+const jwt = require('jsonwebtoken');
 const db = require('../config/database');
 const logger = require('../utils/logger');
 
 const router = express.Router();
 
-// Store active SSE connections
+// Store active SSE connections with user context
 const clients = new Map();
+
+// Connection limits per user
+const MAX_CONNECTIONS_PER_USER = 5;
+
+/**
+ * SSE Authentication Middleware
+ * EventSource doesn't support custom headers, so we accept token via query param
+ */
+function authenticateSSE(req, res, next) {
+  try {
+    // Try to get token from query parameter (EventSource limitation)
+    const token = req.query.token;
+
+    if (!token) {
+      logger.warn('SSE connection attempt without token');
+      return res.status(401).json({
+        success: false,
+        error: {
+          code: 'AUTH_TOKEN_MISSING',
+          message: 'Authentication token required in query parameter'
+        }
+      });
+    }
+
+    // Verify JWT token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    logger.warn('SSE JWT verification failed:', err.message);
+    
+    const errorCode = err.name === 'TokenExpiredError' 
+      ? 'AUTH_TOKEN_EXPIRED' 
+      : 'AUTH_TOKEN_INVALID';
+
+    return res.status(401).json({
+      success: false,
+      error: {
+        code: errorCode,
+        message: 'Invalid or expired token'
+      }
+    });
+  }
+}
 
 /**
  * GET /stream/sensor-data
  * 
  * EventSource endpoint for real-time sensor data streaming.
  * Sends sensor readings, alerts, and status updates to connected clients.
+ * 
+ * Authentication: Requires JWT token as query parameter (?token=...)
+ * Authorization: Available to all authenticated users
  */
-router.get('/sensor-data', (req, res) => {
+router.get('/sensor-data', authenticateSSE, (req, res) => {
+  const origin = req.get('origin');
+  
+  // Check connection limit for this user
+  const userConnections = Array.from(clients.values())
+    .filter(client => client.userId === req.user.user_id);
+  
+  if (userConnections.length >= MAX_CONNECTIONS_PER_USER) {
+    logger.warn(`User ${req.user.user_id} exceeded connection limit`);
+    return res.status(429).json({
+      success: false,
+      error: {
+        code: 'TOO_MANY_CONNECTIONS',
+        message: `Maximum ${MAX_CONNECTIONS_PER_USER} concurrent connections allowed`
+      }
+    });
+  }
+  
   // Set headers for SSE
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+  
+  // CRITICAL: Write headers immediately to establish connection
+  res.flushHeaders();
 
   // Generate unique client ID
   const clientId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
   
-  logger.info(`SSE client connected: ${clientId}`);
+  logger.info(`SSE client connected - User: ${req.user.employee_id} (${req.user.role}), ClientId: ${clientId}`);
 
-  // Store client connection
-  clients.set(clientId, res);
+  // Store client connection with user context
+  clients.set(clientId, {
+    response: res,
+    userId: req.user.user_id,
+    employee_id: req.user.employee_id,
+    role: req.user.role,
+    connectedAt: new Date()
+  });
 
-  // Send initial connection message
+  // Send initial connection message and flush immediately
   res.write(`data: ${JSON.stringify({
     type: 'connected',
     clientId,
     timestamp: new Date().toISOString()
   })}\n\n`);
+  
+  // Force flush the initial message
+  if (res.flush) res.flush();
 
   // Setup heartbeat to keep connection alive (every 30 seconds)
   const heartbeat = setInterval(() => {
@@ -121,7 +198,11 @@ function broadcast(event) {
 
   clients.forEach((client, clientId) => {
     try {
-      client.write(message);
+      client.response.write(message);
+      // CRITICAL: Force flush to send immediately
+      if (client.response.flush) {
+        client.response.flush();
+      }
       successCount++;
     } catch (error) {
       logger.error(`Failed to send to client ${clientId}:`, error);
@@ -130,8 +211,12 @@ function broadcast(event) {
     }
   });
 
-  if (successCount > 0 || failCount > 0) {
-    logger.debug(`Broadcast ${event.type}: ${successCount} delivered, ${failCount} failed`);
+  // Log broadcasts for debugging
+  if (successCount > 0) {
+    logger.info(`Broadcast ${event.type}: ${successCount} clients notified`);
+  }
+  if (failCount > 0) {
+    logger.warn(`Broadcast ${event.type}: ${failCount} clients failed`);
   }
 }
 
