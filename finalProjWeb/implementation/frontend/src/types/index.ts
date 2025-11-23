@@ -36,6 +36,24 @@ export interface Patient {
   status: PatientStatus;
   created_at: string;
   updated_at: string;
+  alert_thresholds?: {
+    oxygen_level?: {
+      lower_limit: number;
+      upper_limit: number;
+    };
+    blood_oxygen?: {  // Backend uses 'blood_oxygen'
+      lower_limit: number;
+      upper_limit: number;
+    };
+    heart_rate?: {
+      lower_limit: number;
+      upper_limit: number;
+    };
+    temperature?: {
+      lower_limit: number;
+      upper_limit: number;
+    };
+  };
 }
 
 /**

@@ -60,6 +60,22 @@ const PatientCard: React.FC<PatientCardProps> = ({
     });
   };
 
+  // Get thresholds from patient data or use defaults
+  const getThresholds = () => {
+    // Handle both 'oxygen_level' and 'blood_oxygen' keys for backward compatibility
+    const oxygenThreshold = patient.alert_thresholds?.oxygen_level || 
+                            patient.alert_thresholds?.blood_oxygen || 
+                            { lower_limit: 90, upper_limit: 100 };
+    
+    return {
+      oxygen_level: oxygenThreshold,
+      heart_rate: patient.alert_thresholds?.heart_rate || { lower_limit: 55, upper_limit: 110 },
+      temperature: patient.alert_thresholds?.temperature || { lower_limit: 36.0, upper_limit: 38.3 }
+    };
+  };
+
+  const thresholds = getThresholds();
+
   // Determine status badge based on readings
   const getStatusBadge = () => {
     if (!latestReading) {
@@ -70,34 +86,44 @@ const PatientCard: React.FC<PatientCardProps> = ({
       return <span className="badge bg-danger">Critical</span>;
     }
 
-    // Warning thresholds
+    // Check if any values are outside warning range (10% buffer from critical)
     const o2 = latestReading.oxygen_level;
     const hr = latestReading.heart_rate;
+    const temp = latestReading.temperature;
 
-    if (o2 < 95 || hr < 60 || hr > 100) {
+    const o2Warn = o2 < thresholds.oxygen_level.lower_limit + 5;
+    const hrWarnLow = hr < thresholds.heart_rate.lower_limit + 5;
+    const hrWarnHigh = hr > thresholds.heart_rate.upper_limit - 5;
+    const tempWarnLow = temp < thresholds.temperature.lower_limit + 1;
+    const tempWarnHigh = temp > thresholds.temperature.upper_limit - 1;
+
+    if (o2Warn || hrWarnLow || hrWarnHigh || tempWarnLow || tempWarnHigh) {
       return <span className="badge bg-warning text-dark">Warning</span>;
     }
 
     return <span className="badge bg-success">Normal</span>;
   };
 
-  // Determine vital sign styling based on thresholds
+  // Determine vital sign styling based on patient-specific thresholds
   const getVitalClass = (type: 'oxygen' | 'heart_rate' | 'temperature', value: number) => {
     if (type === 'oxygen') {
-      if (value < 90) return 'text-danger fw-bold';
-      if (value < 95) return 'text-warning';
+      const thresh = thresholds.oxygen_level;
+      if (value < thresh.lower_limit) return 'text-danger fw-bold';
+      if (value < thresh.lower_limit + 5) return 'text-warning';
       return 'text-success';
     }
 
     if (type === 'heart_rate') {
-      if (value < 55 || value > 110) return 'text-danger fw-bold';
-      if (value < 60 || value > 100) return 'text-warning';
+      const thresh = thresholds.heart_rate;
+      if (value < thresh.lower_limit || value > thresh.upper_limit) return 'text-danger fw-bold';
+      if (value < thresh.lower_limit + 5 || value > thresh.upper_limit - 5) return 'text-warning';
       return 'text-success';
     }
 
     if (type === 'temperature') {
-      if (value < 36.0 || value > 38.3) return 'text-danger fw-bold';
-      if (value > 37.9) return 'text-warning';
+      const thresh = thresholds.temperature;
+      if (value < thresh.lower_limit || value > thresh.upper_limit) return 'text-danger fw-bold';
+      if (value < thresh.lower_limit + 1 || value > thresh.upper_limit - 1) return 'text-warning';
       return 'text-success';
     }
 

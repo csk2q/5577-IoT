@@ -50,7 +50,7 @@ const getPatients = async (req, res) => {
     const [patients] = await db.query(
       `SELECT 
         p.patient_id,
-        p.patient_identifier as patient_id,
+        p.patient_identifier,
         CONCAT(p.first_name, ' ', p.last_name) as name,
         p.room_number,
         s.sensor_identifier as sensor_id,
@@ -82,13 +82,37 @@ const getPatients = async (req, res) => {
       [...queryParams, parseInt(limit), offset]
     );
 
+    // Get alert thresholds for all patients in one query
+    const patientIds = patients.map(p => p.patient_id);
+    let thresholdsMap = {};
+    
+    if (patientIds.length > 0) {
+      const [thresholds] = await db.query(
+        `SELECT patient_id, metric_type, lower_limit, upper_limit
+         FROM alert_thresholds
+         WHERE patient_id IN (?)`,
+        [patientIds]
+      );
+      
+      // Group thresholds by patient_id (numeric)
+      thresholds.forEach(t => {
+        if (!thresholdsMap[t.patient_id]) {
+          thresholdsMap[t.patient_id] = {};
+        }
+        thresholdsMap[t.patient_id][t.metric_type] = {
+          lower_limit: parseFloat(t.lower_limit),
+          upper_limit: parseFloat(t.upper_limit)
+        };
+      });
+    }
+
     logger.info(`Retrieved ${patients.length} patients (status: ${status}, sort: ${sort})`);
 
     res.status(200).json({
       success: true,
       data: {
         items: patients.map(p => ({
-          patient_id: p.patient_id,
+          patient_id: p.patient_identifier,  // Return the identifier (P-2025-001)
           name: p.name,
           room_number: p.room_number,
           sensor_id: p.sensor_id,
@@ -100,7 +124,9 @@ const getPatients = async (req, res) => {
             oxygen_level: p.blood_oxygen_level,
             temperature: p.temperature,
             timestamp: p.last_reading_time
-          } : null
+          } : null,
+          // Include alert thresholds (using numeric patient_id)
+          alert_thresholds: thresholdsMap[p.patient_id] || {}
         })),
         pagination: {
           page: parseInt(page),
