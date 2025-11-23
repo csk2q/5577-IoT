@@ -521,10 +521,180 @@ const updatePatientStatus = async (req, res) => {
   }
 };
 
+/**
+ * Update patient alert thresholds
+ * PUT /api/v1/patients/:patient_id/thresholds
+ */
+const updatePatientThresholds = async (req, res) => {
+  try {
+    const { patient_id } = req.params;
+    const { heart_rate, blood_oxygen, temperature } = req.body;
+
+    // Validate at least one threshold is provided
+    if (!heart_rate && !blood_oxygen && !temperature) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: 'At least one threshold configuration is required'
+        }
+      });
+    }
+
+    // Validate threshold structure
+    const validateThreshold = (threshold, name) => {
+      if (!threshold) return null;
+      
+      if (typeof threshold.lower_limit !== 'number' || typeof threshold.upper_limit !== 'number') {
+        return `${name} must include lower_limit and upper_limit as numbers`;
+      }
+      
+      if (threshold.lower_limit >= threshold.upper_limit) {
+        return `${name} lower_limit must be less than upper_limit`;
+      }
+      
+      return null;
+    };
+
+    const heartRateError = validateThreshold(heart_rate, 'heart_rate');
+    const bloodOxygenError = validateThreshold(blood_oxygen, 'blood_oxygen');
+    const temperatureError = validateThreshold(temperature, 'temperature');
+
+    if (heartRateError || bloodOxygenError || temperatureError) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          code: 'INVALID_INPUT',
+          message: heartRateError || bloodOxygenError || temperatureError
+        }
+      });
+    }
+
+    // Check if patient exists
+    const [patients] = await db.query(
+      'SELECT patient_id FROM patients WHERE patient_identifier = ?',
+      [patient_id]
+    );
+
+    if (patients.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: {
+          code: 'PATIENT_NOT_FOUND',
+          message: 'Patient not found'
+        }
+      });
+    }
+
+    const dbPatientId = patients[0].patient_id;
+
+    // Update or insert thresholds (upsert)
+    const thresholds = [];
+    
+    if (heart_rate) {
+      thresholds.push({
+        metric_type: 'heart_rate',
+        lower_limit: heart_rate.lower_limit,
+        upper_limit: heart_rate.upper_limit
+      });
+    }
+
+    if (blood_oxygen) {
+      thresholds.push({
+        metric_type: 'blood_oxygen',
+        lower_limit: blood_oxygen.lower_limit,
+        upper_limit: blood_oxygen.upper_limit
+      });
+    }
+
+    if (temperature) {
+      thresholds.push({
+        metric_type: 'temperature',
+        lower_limit: temperature.lower_limit,
+        upper_limit: temperature.upper_limit
+      });
+    }
+
+    // Begin transaction
+    await db.query('START TRANSACTION');
+
+    try {
+      // Upsert each threshold
+      for (const threshold of thresholds) {
+        await db.query(
+          `INSERT INTO alert_thresholds (patient_id, metric_type, lower_limit, upper_limit, created_by)
+           VALUES (?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE 
+             lower_limit = VALUES(lower_limit),
+             upper_limit = VALUES(upper_limit),
+             updated_at = CURRENT_TIMESTAMP`,
+          [dbPatientId, threshold.metric_type, threshold.lower_limit, threshold.upper_limit, req.user.user_id]
+        );
+      }
+
+      await db.query('COMMIT');
+
+      // Fetch updated thresholds
+      const [updatedThresholds] = await db.query(
+        `SELECT metric_type, lower_limit, upper_limit, updated_at
+         FROM alert_thresholds
+         WHERE patient_id = ?`,
+        [dbPatientId]
+      );
+
+      // Format response
+      const alert_thresholds = {};
+      updatedThresholds.forEach(t => {
+        alert_thresholds[t.metric_type] = {
+          lower_limit: parseFloat(t.lower_limit),
+          upper_limit: parseFloat(t.upper_limit),
+          updated_at: t.updated_at
+        };
+      });
+
+      logger.info(`Thresholds updated for patient ${patient_id} by ${req.user.employee_id}`);
+
+      // Audit log
+      await db.query(
+        'INSERT INTO audit_logs (user_id, action_type, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
+        [req.user.user_id, 'update_thresholds', 'patients', patient_id, JSON.stringify({ 
+          patient_id,
+          thresholds: alert_thresholds,
+          updated_by: req.user.employee_id
+        })]
+      );
+
+      res.status(200).json({
+        success: true,
+        data: {
+          patient_id,
+          alert_thresholds
+        },
+        message: 'Thresholds updated successfully'
+      });
+
+    } catch (error) {
+      await db.query('ROLLBACK');
+      throw error;
+    }
+
+  } catch (error) {
+    logger.error('Update patient thresholds error:', error);
+    res.status(500).json({
+      success: false,
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: 'An error occurred while updating thresholds'
+      }
+    });
+  }
+};
+
 module.exports = {
   getPatients,
   getPatient,
   createPatient,
   updatePatient,
-  updatePatientStatus
+  updatePatientStatus,
+  updatePatientThresholds
 };
