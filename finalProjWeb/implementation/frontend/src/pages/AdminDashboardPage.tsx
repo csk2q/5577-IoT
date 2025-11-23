@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Table, Button, Modal, Form, Alert, Badge, Spinner } from 'react-bootstrap';
 import { useAuth } from '../contexts/AuthContext';
-import { userAPI, patientAPI, getErrorMessage } from '../services/api';
-import type { User, UserRole, CreateUserRequest, Patient } from '../types';
-import ThresholdConfigModal from '../components/ThresholdConfigModal';
+import { userAPI, getErrorMessage } from '../services/api';
+import type { User, UserRole, CreateUserRequest } from '../types';
 
 export default function AdminDashboardPage() {
   const { user, logout } = useAuth();
@@ -26,16 +25,9 @@ export default function AdminDashboardPage() {
     email: '',
   });
 
-  // Patient management state
-  const [patients, setPatients] = useState<Patient[]>([]);
-  const [patientsLoading, setPatientsLoading] = useState(false);
-  const [showThresholdModal, setShowThresholdModal] = useState(false);
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
-
-  // Fetch users and patients on mount
+  // Fetch users on mount
   useEffect(() => {
     fetchUsers();
-    fetchPatients();
   }, []);
 
   // Auto-dismiss messages after 5 seconds
@@ -64,33 +56,6 @@ export default function AdminDashboardPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const fetchPatients = async () => {
-    try {
-      setPatientsLoading(true);
-      const response = await patientAPI.getPatients({ limit: 100, status: 'active' });
-      setPatients(response.items);
-    } catch (err) {
-      console.error('Failed to fetch patients:', err);
-    } finally {
-      setPatientsLoading(false);
-    }
-  };
-
-  const handleConfigureThresholds = (patient: Patient) => {
-    setSelectedPatient(patient);
-    setShowThresholdModal(true);
-  };
-
-  const handleThresholdModalClose = () => {
-    setShowThresholdModal(false);
-    setSelectedPatient(null);
-  };
-
-  const handleThresholdSaveSuccess = () => {
-    setSuccessMessage('Patient thresholds updated successfully');
-    fetchPatients(); // Refresh patient list
   };
 
   const handleShowCreateModal = () => {
@@ -301,106 +266,6 @@ export default function AdminDashboardPage() {
           </Card>
         </Col>
       </Row>
-
-      {/* Patient Management Section */}
-      <Row className="mt-4">
-        <Col>
-          <Card>
-            <Card.Header className="d-flex justify-content-between align-items-center bg-primary text-white">
-              <div>
-                <i className="bi bi-heart-pulse-fill me-2"></i>
-                Patient Management
-              </div>
-              <Button variant="light" size="sm" onClick={fetchPatients}>
-                <i className="bi bi-arrow-clockwise me-2"></i>
-                Refresh
-              </Button>
-            </Card.Header>
-            <Card.Body>
-              {patientsLoading ? (
-                <div className="text-center py-5">
-                  <Spinner animation="border" variant="primary" />
-                  <p className="mt-3 text-muted">Loading patients...</p>
-                </div>
-              ) : patients.length === 0 ? (
-                <div className="text-center py-5 text-muted">
-                  <i className="bi bi-inbox" style={{ fontSize: '3rem' }}></i>
-                  <p className="mt-3">No active patients found</p>
-                </div>
-              ) : (
-                <Table striped bordered hover responsive>
-                  <thead>
-                    <tr>
-                      <th>Patient ID</th>
-                      <th>Name</th>
-                      <th>Room</th>
-                      <th>Sensor ID</th>
-                      <th>Status</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {patients.map((patient) => (
-                      <tr key={patient.patient_id}>
-                        <td>
-                          <strong>{patient.patient_id}</strong>
-                        </td>
-                        <td>{patient.name}</td>
-                        <td>
-                          <Badge bg="info">{patient.room_number}</Badge>
-                        </td>
-                        <td>
-                          {patient.sensor_id ? (
-                            <span className="text-success">
-                              <i className="bi bi-check-circle-fill me-1"></i>
-                              {patient.sensor_id}
-                            </span>
-                          ) : (
-                            <span className="text-muted">No sensor</span>
-                          )}
-                        </td>
-                        <td>
-                          <Badge bg={patient.status === 'active' ? 'success' : 'secondary'}>
-                            {patient.status.toUpperCase()}
-                          </Badge>
-                        </td>
-                        <td>
-                          <Button
-                            variant="outline-primary"
-                            size="sm"
-                            onClick={() => handleConfigureThresholds(patient)}
-                          >
-                            <i className="bi bi-sliders me-1"></i>
-                            Configure Thresholds
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </Table>
-              )}
-              
-              <div className="mt-3 text-muted">
-                <small>
-                  <i className="bi bi-info-circle me-2"></i>
-                  Total Active Patients: {patients.length}
-                </small>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Threshold Configuration Modal */}
-      {selectedPatient && (
-        <ThresholdConfigModal
-          show={showThresholdModal}
-          onHide={handleThresholdModalClose}
-          patientId={selectedPatient.patient_id}
-          patientName={selectedPatient.name}
-          onSuccess={handleThresholdSaveSuccess}
-        />
-      )}
 
       {/* Create User Modal */}
       <Modal show={showCreateModal} onHide={handleCloseCreateModal} centered>

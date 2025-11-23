@@ -18,6 +18,7 @@ interface PatientCardProps {
   hasActiveAlert?: boolean;
   onClick?: () => void;
   onAcknowledgeAlert?: (patientId: string) => void;
+  onConfigureThresholds?: (patient: Patient) => void;
 }
 
 /**
@@ -33,12 +34,20 @@ const PatientCard: React.FC<PatientCardProps> = ({
   history,
   hasActiveAlert = false,
   onClick,
-  onAcknowledgeAlert
+  onAcknowledgeAlert,
+  onConfigureThresholds
 }) => {
   const handleAcknowledge = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card click
     if (onAcknowledgeAlert) {
       onAcknowledgeAlert(patient.patient_id);
+    }
+  };
+
+  const handleConfigureThresholds = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click
+    if (onConfigureThresholds) {
+      onConfigureThresholds(patient);
     }
   };
   // Format timestamp to readable time
@@ -240,6 +249,20 @@ const PatientCard: React.FC<PatientCardProps> = ({
                 Acknowledge
               </button>
             )}
+          </div>
+        )}
+
+        {/* Threshold Configuration Button */}
+        {onConfigureThresholds && (
+          <div className="mt-3 d-grid">
+            <button
+              className="btn btn-sm btn-outline-primary"
+              onClick={handleConfigureThresholds}
+              title="Configure alert thresholds for this patient"
+            >
+              <i className="bi bi-sliders me-1"></i>
+              Configure Thresholds
+            </button>
           </div>
         )}
       </div>

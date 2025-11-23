@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { patientAPI, authAPI, sensorAPI, alertAPI, getErrorMessage } from '../services/api';
 import { Patient } from '../types';
 import PatientCard from '../components/PatientCard';
+import ThresholdConfigModal from '../components/ThresholdConfigModal';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { useSSE, SSESensorReadingEvent, SSEAlertTriggeredEvent, SSEAlertAcknowledgedEvent } from '../hooks/useSSE';
 
@@ -45,6 +46,10 @@ const DashboardPage = () => {
   
   // Alert IDs for each patient: Map<patient_id, alert_id>
   const [patientAlertIds, setPatientAlertIds] = useState<Map<string, number>>(new Map());
+
+  // Threshold configuration modal state
+  const [showThresholdModal, setShowThresholdModal] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
   // SSE Connection for real-time updates
   const { connectionState, reconnect } = useSSE({
@@ -236,6 +241,21 @@ const DashboardPage = () => {
     }
   };
 
+  const handleConfigureThresholds = (patient: Patient) => {
+    setSelectedPatient(patient);
+    setShowThresholdModal(true);
+  };
+
+  const handleThresholdModalClose = () => {
+    setShowThresholdModal(false);
+    setSelectedPatient(null);
+  };
+
+  const handleThresholdSaveSuccess = () => {
+    // Optionally refetch patients to get updated threshold data
+    fetchPatients();
+  };
+
   return (
     <div className="min-vh-100 bg-light">
       {/* Navigation Bar */}
@@ -362,6 +382,7 @@ const DashboardPage = () => {
                       hasActiveAlert={hasAlert}
                       onClick={() => console.log('Patient clicked:', patient.patient_id)}
                       onAcknowledgeAlert={handleAcknowledgeAlert}
+                      onConfigureThresholds={handleConfigureThresholds}
                     />
                   </ErrorBoundary>
                 </Col>
@@ -381,6 +402,17 @@ const DashboardPage = () => {
           </Col>
         </Row>
       </Container>
+
+      {/* Threshold Configuration Modal */}
+      {selectedPatient && (
+        <ThresholdConfigModal
+          show={showThresholdModal}
+          onHide={handleThresholdModalClose}
+          patientId={selectedPatient.patient_id}
+          patientName={selectedPatient.name}
+          onSuccess={handleThresholdSaveSuccess}
+        />
+      )}
     </div>
   );
 };
