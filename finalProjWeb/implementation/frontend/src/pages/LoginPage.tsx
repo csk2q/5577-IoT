@@ -123,9 +123,9 @@ const LoginPage = () => {
           <div className="text-center mt-3">
             <small className="text-muted">
               <strong>Test Accounts:</strong><br />
-              Admin: 100000 / admin123<br />
-              Nurse: 200000 / nurse123<br />
-              Intake: 300000 / intake123
+              Admin: 100001 / password123<br />
+              Nurse: 200001 / password123<br />
+              Intake: 300001 / password123
             </small>
           </div>
         </Col>
