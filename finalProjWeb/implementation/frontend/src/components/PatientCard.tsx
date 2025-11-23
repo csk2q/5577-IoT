@@ -132,80 +132,77 @@ const PatientCard: React.FC<PatientCardProps> = ({
             <hr />
             <div className="vital-signs">
               {/* Oxygen Level */}
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <div>
-                  <i className="bi bi-droplet-fill text-primary me-2"></i>
-                  <span className="small">O₂ Saturation</span>
+              <div className="mb-3">
+                <div className="d-flex justify-content-between align-items-center mb-1">
+                  <div>
+                    <i className="bi bi-droplet-fill text-primary me-2"></i>
+                    <span className="small">O₂ Saturation</span>
+                  </div>
+                  <span className={`fs-5 ${getVitalClass('oxygen', latestReading.oxygen_level)}`}>
+                    {latestReading.oxygen_level.toFixed(1)}%
+                  </span>
                 </div>
-                <span className={`fs-5 ${getVitalClass('oxygen', latestReading.oxygen_level)}`}>
-                  {latestReading.oxygen_level.toFixed(1)}%
-                </span>
+                {history && history.oxygen_level.length > 1 && (
+                  <Sparkline
+                    data={history.oxygen_level}
+                    width={280}
+                    height={30}
+                    color="#0d6efd"
+                    strokeWidth={2}
+                    min={50}
+                    max={100}
+                  />
+                )}
               </div>
 
               {/* Heart Rate */}
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <div>
-                  <i className="bi bi-heart-pulse-fill text-danger me-2"></i>
-                  <span className="small">Heart Rate</span>
+              <div className="mb-3">
+                <div className="d-flex justify-content-between align-items-center mb-1">
+                  <div>
+                    <i className="bi bi-heart-pulse-fill text-danger me-2"></i>
+                    <span className="small">Heart Rate</span>
+                  </div>
+                  <span className={`fs-5 ${getVitalClass('heart_rate', latestReading.heart_rate)}`}>
+                    {latestReading.heart_rate}
+                    <small className="ms-1 text-muted">bpm</small>
+                  </span>
                 </div>
-                <span className={`fs-5 ${getVitalClass('heart_rate', latestReading.heart_rate)}`}>
-                  {latestReading.heart_rate}
-                  <small className="ms-1 text-muted">bpm</small>
-                </span>
+                {history && history.heart_rate.length > 1 && (
+                  <Sparkline
+                    data={history.heart_rate}
+                    width={280}
+                    height={30}
+                    color="#dc3545"
+                    strokeWidth={2}
+                    min={30}
+                    max={250}
+                  />
+                )}
               </div>
 
               {/* Temperature */}
-              <div className="d-flex justify-content-between align-items-center mb-2">
-                <div>
-                  <i className="bi bi-thermometer-half text-warning me-2"></i>
-                  <span className="small">Temperature</span>
+              <div className="mb-3">
+                <div className="d-flex justify-content-between align-items-center mb-1">
+                  <div>
+                    <i className="bi bi-thermometer-half text-warning me-2"></i>
+                    <span className="small">Temperature</span>
+                  </div>
+                  <span className={`fs-5 ${getVitalClass('temperature', latestReading.temperature)}`}>
+                    {latestReading.temperature.toFixed(1)}°C
+                  </span>
                 </div>
-                <span className={`fs-5 ${getVitalClass('temperature', latestReading.temperature)}`}>
-                  {latestReading.temperature.toFixed(1)}°C
-                </span>
+                {history && history.temperature.length > 1 && (
+                  <Sparkline
+                    data={history.temperature}
+                    width={280}
+                    height={30}
+                    color="#ffc107"
+                    strokeWidth={2}
+                    min={30}
+                    max={45}
+                  />
+                )}
               </div>
-
-              {/* Sparkline Graphs */}
-              {history && history.oxygen_level.length > 1 && (
-                <div className="mt-3">
-                  <div className="mb-2">
-                    <small className="text-muted d-block mb-1">O₂ Trend</small>
-                    <Sparkline
-                      data={history.oxygen_level}
-                      width={280}
-                      height={30}
-                      color="#0d6efd"
-                      strokeWidth={2}
-                      min={50}
-                      max={100}
-                    />
-                  </div>
-                  <div className="mb-2">
-                    <small className="text-muted d-block mb-1">Heart Rate Trend</small>
-                    <Sparkline
-                      data={history.heart_rate}
-                      width={280}
-                      height={30}
-                      color="#dc3545"
-                      strokeWidth={2}
-                      min={30}
-                      max={250}
-                    />
-                  </div>
-                  <div className="mb-2">
-                    <small className="text-muted d-block mb-1">Temperature Trend</small>
-                    <Sparkline
-                      data={history.temperature}
-                      width={280}
-                      height={30}
-                      color="#ffc107"
-                      strokeWidth={2}
-                      min={30}
-                      max={45}
-                    />
-                  </div>
-                </div>
-              )}
 
               {/* Last Update */}
               <div className="text-end mt-2">
