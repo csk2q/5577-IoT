@@ -176,7 +176,7 @@ const PatientCard: React.FC<PatientCardProps> = ({
                       height={30}
                       color="#0d6efd"
                       strokeWidth={2}
-                      min={85}
+                      min={50}
                       max={100}
                     />
                   </div>
@@ -188,8 +188,8 @@ const PatientCard: React.FC<PatientCardProps> = ({
                       height={30}
                       color="#dc3545"
                       strokeWidth={2}
-                      min={50}
-                      max={120}
+                      min={30}
+                      max={250}
                     />
                   </div>
                   <div className="mb-2">
@@ -200,8 +200,8 @@ const PatientCard: React.FC<PatientCardProps> = ({
                       height={30}
                       color="#ffc107"
                       strokeWidth={2}
-                      min={35}
-                      max={40}
+                      min={30}
+                      max={45}
                     />
                   </div>
                 </div>
