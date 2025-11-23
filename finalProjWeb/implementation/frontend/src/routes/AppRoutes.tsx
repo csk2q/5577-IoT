@@ -2,7 +2,8 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import LoginPage from '../pages/LoginPage';
 import DashboardPage from '../pages/DashboardPage';
-// Import other pages as they are created
+import AdminDashboardPage from '../pages/AdminDashboardPage';
+import IntakeDashboardPage from '../pages/IntakeDashboardPage';
 
 const ProtectedRoute = ({ children, allowedRoles }: { children: JSX.Element; allowedRoles?: string[] }) => {
   const { isAuthenticated, user } = useAuth();
@@ -18,15 +19,57 @@ const ProtectedRoute = ({ children, allowedRoles }: { children: JSX.Element; all
   return children;
 };
 
+/**
+ * Role-based redirect - sends users to their appropriate dashboard
+ */
+const RoleBasedRedirect = () => {
+  const { user } = useAuth();
+  
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+  
+  switch (user.role) {
+    case 'admin':
+      return <Navigate to="/admin" replace />;
+    case 'intake':
+      return <Navigate to="/intake" replace />;
+    case 'nurse':
+      return <Navigate to="/dashboard" replace />;
+    default:
+      return <Navigate to="/login" replace />;
+  }
+};
+
 const AppRoutes = () => {
   const { isAuthenticated } = useAuth();
 
   return (
     <Routes>
       {/* Public routes */}
-      <Route path="/login" element={isAuthenticated ? <Navigate to="/dashboard" /> : <LoginPage />} />
+      <Route path="/login" element={isAuthenticated ? <RoleBasedRedirect /> : <LoginPage />} />
       
-      {/* Protected routes */}
+      {/* Admin Dashboard */}
+      <Route
+        path="/admin"
+        element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <AdminDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      
+      {/* Intake Dashboard */}
+      <Route
+        path="/intake"
+        element={
+          <ProtectedRoute allowedRoles={['intake', 'admin']}>
+            <IntakeDashboardPage />
+          </ProtectedRoute>
+        }
+      />
+      
+      {/* Nurse Dashboard */}
       <Route
         path="/dashboard"
         element={
@@ -35,29 +78,9 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
-      
-      {/* Admin routes */}
-      {/* <Route
-        path="/admin/users"
-        element={
-          <ProtectedRoute allowedRoles={['admin']}>
-            <UserManagementPage />
-          </ProtectedRoute>
-        }
-      /> */}
-      
-      {/* Intake routes */}
-      {/* <Route
-        path="/intake/patients"
-        element={
-          <ProtectedRoute allowedRoles={['intake', 'admin']}>
-            <PatientIntakePage />
-          </ProtectedRoute>
-        }
-      /> */}
 
-      {/* Default redirect */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      {/* Default redirect - role-based */}
+      <Route path="/" element={<RoleBasedRedirect />} />
       
       {/* 404 */}
       <Route path="*" element={<div className="container mt-5"><h1>404 - Page Not Found</h1></div>} />

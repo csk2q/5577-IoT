@@ -204,18 +204,20 @@ export interface CreateUserRequest {
   employee_id: string;
   password: string;
   role: UserRole;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
 }
 
 /**
- * Create patient request
+ * Create patient request (backend expects these field names)
  */
 export interface CreatePatientRequest {
-  patient_identifier: string;
-  first_name: string;
-  last_name: string;
-  date_of_birth?: string;
+  patient_id: string;  // Backend expects patient_id, not patient_identifier
+  name: string;        // Backend expects single name field
   room_number: string;
   sensor_id?: string;
+  date_of_birth?: string;  // Optional field
 }
 
 /**
