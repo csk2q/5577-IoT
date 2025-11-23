@@ -82,6 +82,18 @@ const AppRoutes = () => {
       {/* Default redirect - role-based */}
       <Route path="/" element={<RoleBasedRedirect />} />
       
+      {/* Unauthorized */}
+      <Route 
+        path="/unauthorized" 
+        element={
+          <div className="container mt-5 text-center">
+            <h1 className="text-danger">Access Denied</h1>
+            <p>You do not have permission to access this page.</p>
+            <a href="/" className="btn btn-primary">Go to Dashboard</a>
+          </div>
+        } 
+      />
+      
       {/* 404 */}
       <Route path="*" element={<div className="container mt-5"><h1>404 - Page Not Found</h1></div>} />
     </Routes>
