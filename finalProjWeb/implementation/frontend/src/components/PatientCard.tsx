@@ -1,5 +1,6 @@
 import React from 'react';
 import { Patient } from '../types';
+import Sparkline from './Sparkline';
 
 interface PatientCardProps {
   patient: Patient;
@@ -8,6 +9,11 @@ interface PatientCardProps {
     heart_rate: number;
     temperature: number;
     timestamp: string;
+  };
+  history?: {
+    oxygen_level: number[];
+    heart_rate: number[];
+    temperature: number[];
   };
   hasActiveAlert?: boolean;
   onClick?: () => void;
@@ -24,6 +30,7 @@ interface PatientCardProps {
 const PatientCard: React.FC<PatientCardProps> = ({
   patient,
   latestReading,
+  history,
   hasActiveAlert = false,
   onClick,
   onAcknowledgeAlert
@@ -158,11 +165,47 @@ const PatientCard: React.FC<PatientCardProps> = ({
                 </span>
               </div>
 
-              {/* Spark Line Placeholder */}
-              <div className="mt-3 p-2 bg-light rounded text-center text-muted small">
-                <i className="bi bi-graph-up me-1"></i>
-                Trend Graph (Coming Soon)
-              </div>
+              {/* Sparkline Graphs */}
+              {history && history.oxygen_level.length > 1 && (
+                <div className="mt-3">
+                  <div className="mb-2">
+                    <small className="text-muted d-block mb-1">O₂ Trend</small>
+                    <Sparkline
+                      data={history.oxygen_level}
+                      width={280}
+                      height={30}
+                      color="#0d6efd"
+                      strokeWidth={2}
+                      min={85}
+                      max={100}
+                    />
+                  </div>
+                  <div className="mb-2">
+                    <small className="text-muted d-block mb-1">Heart Rate Trend</small>
+                    <Sparkline
+                      data={history.heart_rate}
+                      width={280}
+                      height={30}
+                      color="#dc3545"
+                      strokeWidth={2}
+                      min={50}
+                      max={120}
+                    />
+                  </div>
+                  <div className="mb-2">
+                    <small className="text-muted d-block mb-1">Temperature Trend</small>
+                    <Sparkline
+                      data={history.temperature}
+                      width={280}
+                      height={30}
+                      color="#ffc107"
+                      strokeWidth={2}
+                      min={35}
+                      max={40}
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Last Update */}
               <div className="text-end mt-2">

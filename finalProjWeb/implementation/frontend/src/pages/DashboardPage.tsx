@@ -17,6 +17,17 @@ interface SensorReading {
   timestamp: string;
 }
 
+interface SensorHistory {
+  latest: SensorReading;
+  history: {
+    oxygen_level: number[];
+    heart_rate: number[];
+    temperature: number[];
+  };
+}
+
+const MAX_HISTORY_POINTS = 100;
+
 const DashboardPage = () => {
   const { user, token, logout } = useAuth();
   const navigate = useNavigate();
@@ -26,8 +37,8 @@ const DashboardPage = () => {
   const [error, setError] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('room_number');
   
-  // Real-time sensor data: Map<sensor_id, latest_reading>
-  const [sensorData, setSensorData] = useState<Map<string, SensorReading>>(new Map());
+  // Real-time sensor data with history: Map<sensor_id, SensorHistory>
+  const [sensorData, setSensorData] = useState<Map<string, SensorHistory>>(new Map());
   
   // Active alerts: Set<patient_id>
   const [activeAlerts, setActiveAlerts] = useState<Set<string>>(new Set());
@@ -41,15 +52,34 @@ const DashboardPage = () => {
     token, // Pass JWT token for authentication
     enabled: !!token, // Only enable when we have a valid token
     onSensorReading: (event: SSESensorReadingEvent) => {
-      // Update sensor data map
+      // Update sensor data map with history tracking
       setSensorData((prev) => {
         const newMap = new Map(prev);
-        newMap.set(event.data.sensor_id, {
+        const existing = newMap.get(event.data.sensor_id);
+        
+        const newReading = {
           oxygen_level: event.data.oxygen_level || 0,
           heart_rate: event.data.heart_rate || 0,
           temperature: event.data.temperature || 0,
           timestamp: event.data.timestamp,
+        };
+        
+        // Add to history arrays, keeping only last MAX_HISTORY_POINTS
+        const history = existing ? {
+          oxygen_level: [...existing.history.oxygen_level, newReading.oxygen_level].slice(-MAX_HISTORY_POINTS),
+          heart_rate: [...existing.history.heart_rate, newReading.heart_rate].slice(-MAX_HISTORY_POINTS),
+          temperature: [...existing.history.temperature, newReading.temperature].slice(-MAX_HISTORY_POINTS),
+        } : {
+          oxygen_level: [newReading.oxygen_level],
+          heart_rate: [newReading.heart_rate],
+          temperature: [newReading.temperature],
+        };
+        
+        newMap.set(event.data.sensor_id, {
+          latest: newReading,
+          history
         });
+        
         return newMap;
       });
     },
@@ -136,7 +166,15 @@ const DashboardPage = () => {
         const newMap = new Map(prev);
         results.forEach(result => {
           if (result) {
-            newMap.set(result.sensor_id, result.reading);
+            // Initialize with single reading
+            newMap.set(result.sensor_id, {
+              latest: result.reading,
+              history: {
+                oxygen_level: [result.reading.oxygen_level],
+                heart_rate: [result.reading.heart_rate],
+                temperature: [result.reading.temperature],
+              }
+            });
           }
         });
         return newMap;
@@ -311,7 +349,7 @@ const DashboardPage = () => {
         {!loading && !error && patients.length > 0 && (
           <Row className="g-3">
             {patients.map((patient) => {
-              const reading = patient.sensor_id ? sensorData.get(patient.sensor_id) : undefined;
+              const sensorHistory = patient.sensor_id ? sensorData.get(patient.sensor_id) : undefined;
               const hasAlert = activeAlerts.has(patient.patient_id);
               
               return (
@@ -319,7 +357,8 @@ const DashboardPage = () => {
                   <ErrorBoundary fallbackMessage={`Unable to display patient ${patient.name}. Please refresh.`}>
                     <PatientCard
                       patient={patient}
-                      latestReading={reading}
+                      latestReading={sensorHistory?.latest}
+                      history={sensorHistory?.history}
                       hasActiveAlert={hasAlert}
                       onClick={() => console.log('Patient clicked:', patient.patient_id)}
                       onAcknowledgeAlert={handleAcknowledgeAlert}
