@@ -153,6 +153,10 @@ docker exec iot-dashboard-db mysql -uroot -prootpassword nurse_station_db \
 curl -X POST http://localhost:3000/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"employee_id": "100001", "password": "password123"}'
+# For Windows CMD Users
+curl -X POST http://localhost:3000/api/v1/auth/login ^
+  -H "Content-Type: application/json" ^
+  -d "{\"employee_id\": \"100001\", \"password\": \"password123\"}"
 
 # Expected output: {"success":true,"data":{"token":"eyJ...","expiresIn":28800,...}}
 ```
