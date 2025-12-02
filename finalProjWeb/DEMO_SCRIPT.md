@@ -84,6 +84,7 @@ docker-compose ps
 curl http://localhost:3000/health
 
 # Expected output: {"status":"ok","timestamp":"..."}
+# Example output: {"success":true,"message":"Server is running","timestamp":"2025-12-02T21:26:26.548Z"}
 ```
 
 ```bash
