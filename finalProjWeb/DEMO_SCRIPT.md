@@ -40,6 +40,7 @@ cd 5577-IoT/finalProjWeb
 # Verify you're in the correct directory
 ls -la
 # You should see: docker-compose.yml, implementation/, DEMO_SCRIPT.md, etc.
+# For windows the command is dir
 ```
 
 **✅ Success Check:** You should see the project files listed.
@@ -49,6 +50,7 @@ ls -la
 ### Step 2: Build and Start the System
 
 ```bash
+# Launch Docker Desktop
 # Build and start all containers (database, backend, frontend)
 docker-compose up -d --build
 
