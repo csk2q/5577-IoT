@@ -116,6 +116,7 @@ The database is automatically seeded with test data on first startup:
 
 ```bash
 # Check users exist
+# Ensure that these commands are all one line to avoid compiler issues
 docker exec iot-dashboard-db mysql -uroot -prootpassword nurse_station_db \
   -e "SELECT employee_id, role FROM users;"
 
