@@ -228,7 +228,7 @@ export const alertAPI = {
    */
   getAlerts: async (params?: { 
     patient_id?: string; 
-    acknowledged?: boolean; 
+    acknowledged?: boolean | 'all'; 
     page?: number; 
     limit?: number 
   }): Promise<PaginatedResponse<Alert>> => {

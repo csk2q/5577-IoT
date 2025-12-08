@@ -92,12 +92,15 @@ export interface Alert {
   patient_id: string;
   sensor_id: string;
   alert_type: AlertType;
+  severity?: string;
+  message?: string;
   metric_type?: MetricType;
   metric_value?: number;
   threshold_exceeded?: ThresholdExceeded;
   acknowledged: boolean;
   acknowledged_by?: number;
   timestamp: string;
+  triggered_at: string;
   acknowledged_at?: string;
 }
 

@@ -6,6 +6,7 @@ import { patientAPI, authAPI, sensorAPI, alertAPI, getErrorMessage } from '../se
 import { Patient } from '../types';
 import PatientCard from '../components/PatientCard';
 import ThresholdConfigModal from '../components/ThresholdConfigModal';
+import PatientHistoryModal from '../components/PatientHistoryModal';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { useSSE, SSESensorReadingEvent, SSEAlertTriggeredEvent, SSEAlertAcknowledgedEvent } from '../hooks/useSSE';
 
@@ -54,6 +55,10 @@ const DashboardPage = () => {
   // Threshold configuration modal state
   const [showThresholdModal, setShowThresholdModal] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  
+  // History modal state
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyPatient, setHistoryPatient] = useState<Patient | null>(null);
 
   // SSE Connection for real-time updates
   const { connectionState, reconnect } = useSSE({
@@ -291,6 +296,16 @@ const DashboardPage = () => {
     fetchPatients();
   };
 
+  const handleViewHistory = (patient: Patient) => {
+    setHistoryPatient(patient);
+    setShowHistoryModal(true);
+  };
+
+  const handleHistoryModalClose = () => {
+    setShowHistoryModal(false);
+    setHistoryPatient(null);
+  };
+
   return (
     <div className="min-vh-100 bg-light">
       {/* Navigation Bar */}
@@ -417,7 +432,7 @@ const DashboardPage = () => {
                       history={sensorHistory?.history}
                       hasActiveAlert={hasAlert}
                       buttonPressAlertId={buttonPressAlertId}
-                      onClick={() => console.log('Patient clicked:', patient.patient_id)}
+                      onClick={() => handleViewHistory(patient)}
                       onAcknowledgeAlert={handleAcknowledgeAlert}
                       onConfigureThresholds={handleConfigureThresholds}
                     />
@@ -448,6 +463,15 @@ const DashboardPage = () => {
           patientId={selectedPatient.patient_id}
           patientName={selectedPatient.name}
           onSuccess={handleThresholdSaveSuccess}
+        />
+      )}
+
+      {/* Patient History Modal */}
+      {historyPatient && (
+        <PatientHistoryModal
+          show={showHistoryModal}
+          onHide={handleHistoryModalClose}
+          patient={historyPatient}
         />
       )}
     </div>
