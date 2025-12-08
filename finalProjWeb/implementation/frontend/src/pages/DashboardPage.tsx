@@ -251,8 +251,15 @@ const DashboardPage = () => {
 
   const handleAcknowledgeAlert = async (patientId: string) => {
     try {
-      // Get the alert_id for this patient
-      const alertId = patientAlertIds.get(patientId);
+      // Check for button press alert first, then vitals alert
+      let alertId = buttonPressAlerts.get(patientId);
+      let alertType = 'button_press';
+      
+      if (!alertId) {
+        alertId = patientAlertIds.get(patientId);
+        alertType = 'vitals';
+      }
+      
       if (!alertId) {
         console.warn('No alert ID found for patient:', patientId);
         return;
@@ -261,8 +268,8 @@ const DashboardPage = () => {
       // Call the API to acknowledge the alert
       await alertAPI.acknowledgeAlert(alertId);
       
-      // The SSE event will handle removing from activeAlerts
-      console.log('Alert acknowledged successfully for patient:', patientId);
+      // The SSE event will handle removing from activeAlerts/buttonPressAlerts
+      console.log(`${alertType} alert acknowledged successfully for patient:`, patientId);
     } catch (err) {
       console.error('Failed to acknowledge alert:', err);
       // Could show a toast notification here
