@@ -244,14 +244,14 @@ void sendSensorData() {
   int pressure = analogRead(pressurePin);
 
   /* Read heart‑rate & SpO₂ */
-  readHRSpO2();
-  readTemperature();
+  // readHRSpO2();
+  // readTemperature();
 
   /* Build JSON payload */
   StaticJsonDocument<512> doc;
   doc["sensor_id"]        = sensor_id;
   doc["timestamp"]       = getTimestamp();
-  doc["pressure"]         = pressure;
+  doc["pressure"]         = pressure == 4095;
   doc["temperature"] = temperatureC;
   doc["heart_rate"]      = heartRate;
   doc["heart_rate_valid"]= validHeartRate;
@@ -332,6 +332,35 @@ void setup() {
 
 
   bool configConfirmed = false;
+  prefs.begin("config", false);
+  bool hasConfig = prefs.isKey("backendHost") && prefs.isKey("sensor_id") &&
+                   prefs.isKey("ssid") && prefs.isKey("password");
+
+  if (hasConfig) {
+    String storedBackendHost = prefs.getString("backendHost");
+    String storedSensorId   = prefs.getString("sensor_id");
+    String storedSsid       = prefs.getString("ssid");
+    String storedPassword   = prefs.getString("password");
+
+    Serial.println("Saved configuration found:");
+    Serial.print("Backend Host: "); Serial.println(storedBackendHost);
+    Serial.print("Sensor ID: "); Serial.println(storedSensorId);
+    Serial.print("SSID: "); Serial.println(storedSsid);
+    Serial.print("Password: "); Serial.println("******");
+
+    Serial.println("Use this configuration? (Y/N)");
+    while (!Serial.available()) delay(100);
+    char useSaved = toupper(Serial.read());
+    if (useSaved == 'Y') {
+      backendHost = storedBackendHost;
+      sensor_id   = storedSensorId;
+      String ssid = storedSsid;
+      String password = storedPassword;
+      connectWiFi(ssid, password);
+      configConfirmed = true;
+    }
+  }
+
   while (!configConfirmed) {
     clearSerialBuffer();
 
@@ -359,6 +388,14 @@ void setup() {
       continue;
     }
 
+    // Save to preferences
+    prefs.begin("config", true);
+    prefs.putString("backendHost", backendHost);
+    prefs.putString("sensor_id", sensor_id);
+    prefs.putString("ssid", ssid);
+    prefs.putString("password", password);
+    prefs.end();
+
     connectWiFi(ssid, password);
     configConfirmed = true;
   }
@@ -369,7 +406,7 @@ void setup() {
 
   Serial.println(F("Attach sensor to finger with rubber band. Press any key to start conversion"));
 
-  byte ledBrightness = 48;  //Options: 0=Off to 255=50mA
+  byte ledBrightness = 32;  //Options: 0=Off to 255=50mA
   byte sampleAverage = 8;   //Options: 1, 2, 4, 8, 16, 32
   byte ledMode = 2;         //Options: 1 = Red only, 2 = Red + IR, 3 = Red + IR + Green
   byte sampleRate = 400;    //Options: 50, 100, 200, 400, 800, 1000, 1600, 3200
@@ -413,11 +450,11 @@ void loop() {
     }
   }
 
-  if (millis() - lastBloodRead > 100)
+  if (millis() - lastBloodRead > 1000)
   {
     lastBloodRead = millis();
-    // readHRSpO2();
-    // readTemperature();
+    readHRSpO2();
+    readTemperature();
     Serial.print("SpO2: ");
     Serial.print(spo2);
     Serial.print(", valid: ");
@@ -437,7 +474,7 @@ void loop() {
   }
 
   // Handle button press: trigger alert and manage buzzer/LED
-  bool buttonPressed = digitalRead(inputPin) == LOW;
+  bool buttonPressed = digitalRead(inputPin) == HIGH;
   if (buttonPressed) {
     buzzerOn = true;
     ledOn = true;
