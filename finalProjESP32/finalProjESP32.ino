@@ -6,30 +6,59 @@
 #include <esp32-hal-gpio.h>
 #include <WiFiClient.h>
 #include <HTTPClient.h>
+#include <Wire.h>            // I²C bus
+#include "MAX30105.h"        // MAX30105 driver
+#include "spo2_algorithm.h"  // SpO₂ / HR algorithm
 // #include <string.h>
 
-const int ledPin    = 2;
-const int pressurePin = 32; // Analog pressure sensor pin
-String backendHost;
-String sensor_id;
-const int buzzerPin = 18;
-const int inputPin  = 34;
+/* ------------------ Pin and constant definitions ------------------ */
+const int ledPin      = 2;
+const int buzzerPin   = 18;
+const int inputPin    = 34;
+const int pressurePin = 32;   // Analog pressure sensor pin
 
-const unsigned long sendIntervalMillseconds = 10000; // 10 seconds
+/* ------------------ Networking ----------------------------------- */
+String backendHost;   // e.g. "http://example.com"
+String sensor_id;     // e.g. "ESP32-001"
+
+/* ------------------ Timing --------------------------------------- */
+const unsigned long sendIntervalMillseconds = 10000; // 10 s
 unsigned long lastSend = 0;
 
+/* ------------------ State variables ----------------------------- */
 bool lastButtonState = false;
 bool buzzerOn = false;
-bool ledOn = false;
+bool ledOn    = false;
 
+/* ------------------ Server -------------------------------------- */
 WiFiServer server(80);
 Preferences prefs;
 
+/* ------------------ MAX30105 ----------------------------------- */
+
+MAX30105 particleSensor;
+
+#define MAX_BRIGHTNESS 255
+
+uint32_t irBuffer[100];   //infrared LED sensor data
+uint32_t redBuffer[100];  //red LED sensor data
+
+int32_t bufferLength = 100;  //buffer length of 100 stores 4 seconds of samples running at 25sps;
+int32_t spo2;           //SPO2 value
+int8_t validSPO2;       //indicator to show if the SPO2 calculation is valid
+int32_t heartRate;      //heart rate value
+int8_t validHeartRate;  //indicator to show if the heart rate calculation is valid
+float temperatureC;
+float temperatureF;
+
+
+/* ------------------ Utility functions -------------------------- */
+
 void clearSerialBuffer() {
-    while (Serial.available() > 0) {
-        Serial.read();
-    }
-    Serial.flush();
+  while (Serial.available() > 0) {
+    Serial.read();
+  }
+  Serial.flush();
 }
 
 // Helper to read a line from the Serial console
@@ -124,10 +153,168 @@ String getTimestamp()
   return String(buffer);
 }
 
+
+/* ------------------ MAX30105 helper functions ------------------- */
+
+/* Read 100 samples (~4 s at 100 Hz) and run the SpO₂/HR algorithm. */
+void readHRSpO2() {
+  //Continuously taking samples from MAX30102.  Heart rate and SpO2 are calculated every 1 second
+  //dumping the first 25 sets of samples in the memory and shift the last 75 sets of samples to the top
+  for (byte i = 25; i < bufferLength; i++) {
+    redBuffer[i - 25] = redBuffer[i];
+    irBuffer[i - 25] = irBuffer[i];
+  }
+
+  //take 25 sets of samples before calculating the heart rate.
+  for (byte i = 75; i < bufferLength; i++) {
+    while (!particleSensor.available())  //do we have new data?
+      particleSensor.check();            //Check the sensor for new data
+
+    redBuffer[i] = particleSensor.getRed();
+    irBuffer[i] = particleSensor.getIR();
+    particleSensor.nextSample();  //We're finished with this sample so move to next sample
+
+    // send samples and calculation result to terminal program through UART
+    // Serial.print(F("red="));
+    // Serial.print(redBuffer[i], DEC);
+    // Serial.print(F(", ir="));
+    // Serial.print(irBuffer[i], DEC);
+
+    // Serial.print(F(", HR="));
+    // Serial.print(heartRate, DEC);
+
+    // Serial.print(F(", HRvalid="));
+    // Serial.print(validHeartRate, DEC);
+
+    // Serial.print(F(", SPO2="));
+    // Serial.print(spo2, DEC);
+
+    // Serial.print(F(", SPO2Valid="));
+    // Serial.println(validSPO2, DEC);
+  }
+
+  //After gathering 25 new samples recalculate HR and SP02
+  maxim_heart_rate_and_oxygen_saturation(irBuffer, bufferLength, redBuffer, &spo2, &validSPO2, &heartRate, &validHeartRate);
+}
+
+void readTemperature()
+{
+  temperatureC = particleSensor.readTemperature();
+  temperatureF = particleSensor.readTemperatureF();
+}
+
+/* ------------------ HTTP request handling --------------------- */
+
+void processClient(WiFiClient &client) {
+  String request = client.readStringUntil('\r');
+  client.read(); // skip '\n'
+  if (request.startsWith("GET")) {
+    int firstSpace = request.indexOf(' ');
+    int secondSpace = request.indexOf(' ', firstSpace + 1);
+    String path = request.substring(firstSpace + 1, secondSpace);
+    if (path == "/led/on") {
+      ledOn = true;
+      sendResponse(client, "LED ON");
+    } else if (path == "/led/off") {
+      ledOn = false;
+      sendResponse(client, "LED OFF");
+    } else if (path == "/buzzer/on") {
+      buzzerOn = true;
+      sendResponse(client, "Buzzer ON");
+    } else if (path == "/buzzer/off") {
+      buzzerOn = false;
+      sendResponse(client, "Buzzer OFF");
+    } else {
+      sendResponse(client, "Not Found");
+    }
+  } else {
+    sendResponse(client, "Unsupported");
+  }
+}
+
+/* ------------------ Sensor data/alert sending ---------------- */
+
+void sendSensorData() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Not connected to WiFi. Cannot send sensor data.");
+    return;
+  }
+
+  /* Read pressure sensor */
+  int pressure = analogRead(pressurePin);
+
+  /* Read heart‑rate & SpO₂ */
+  readHRSpO2();
+  readTemperature();
+
+  /* Build JSON payload */
+  StaticJsonDocument<512> doc;
+  doc["sensor_id"]        = sensor_id;
+  doc["timestamp"]       = getTimestamp();
+  doc["pressure"]         = pressure;
+  doc["temperature"] = temperatureC;
+  doc["heart_rate"]      = heartRate;
+  doc["heart_rate_valid"]= validHeartRate;
+  doc["oxygen_level"]            = spo2;
+  doc["spo2_valid"]      = validSPO2;
+
+  String json;
+  serializeJson(doc, json);
+
+  HTTPClient http;
+  String url = backendHost + "/api/v1/sensors/data";
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  int httpCode = http.POST(json);
+
+  if (httpCode > 0) {
+    String payload = http.getString();
+    Serial.println("Sensor data sent. Response:");
+    Serial.println(payload);
+  } else {
+    Serial.print("Failed to send sensor data. Error: ");
+    Serial.println(http.errorToString(httpCode).c_str());
+  }
+  http.end();
+}
+
+void sendAlert() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("Not connected to WiFi. Cannot send alert.");
+    return;
+  }
+  StaticJsonDocument<256> doc;
+  doc["sensor_id"] = sensor_id;
+  doc["alert_type"] = "button_pressed";
+  doc["timestamp"] = getTimestamp();
+
+  String json;
+  serializeJson(doc, json);
+
+  HTTPClient http;
+  String url = backendHost + "/api/v1/sensors/alert";
+  http.begin(url);
+  http.addHeader("Content-Type", "application/json");
+  int httpCode = http.POST(json);
+
+  if (httpCode > 0) {
+    String payload = http.getString();
+    Serial.println("Alert sent. Response:");
+    Serial.println(payload);
+  } else {
+    Serial.print("Failed to send alert. Error: ");
+    Serial.println(http.errorToString(httpCode).c_str());
+  }
+  http.end();
+}
+
+/* -------------- Ardunio functions -------------- */
+
 void setup() {
   pinMode(ledPin, OUTPUT);
   pinMode(buzzerPin, OUTPUT);
   pinMode(inputPin, INPUT);
+  pinMode(pressurePin, INPUT);
 
   Serial.begin(115200);
   while (!Serial) { delay(10); } // Wait for serial connection
@@ -135,6 +322,14 @@ void setup() {
   readLineFromSerial();
   clearSerialBuffer();
   Serial.println("ESP32 starting...");
+
+  // Initialize sensor
+  while (!particleSensor.begin(Wire, I2C_SPEED_FAST))  //Use default I2C port, 400kHz speed
+  {
+    Serial.println(F("MAX30105 was not found. Please check wiring/power."));
+    delay(5000);
+  }
+
 
   bool configConfirmed = false;
   while (!configConfirmed) {
@@ -168,38 +363,46 @@ void setup() {
     configConfirmed = true;
   }
 
-    syncTime(); // Get time data from the internet
+  syncTime(); // Get time data from the internet
+
+  particleSensor.enableDIETEMPRDY();  //Enable the temp ready interrupt.
+
+  Serial.println(F("Attach sensor to finger with rubber band. Press any key to start conversion"));
+
+  byte ledBrightness = 48;  //Options: 0=Off to 255=50mA
+  byte sampleAverage = 8;   //Options: 1, 2, 4, 8, 16, 32
+  byte ledMode = 2;         //Options: 1 = Red only, 2 = Red + IR, 3 = Red + IR + Green
+  byte sampleRate = 400;    //Options: 50, 100, 200, 400, 800, 1000, 1600, 3200
+  int pulseWidth = 411;     //Options: 69, 118, 215, 411
+  int adcRange = 4096;      //Options: 2048, 4096, 8192, 16384
+
+  particleSensor.setup(ledBrightness, sampleAverage, ledMode, sampleRate, pulseWidth, adcRange);  //Configure sensor with these settings
+  // particleSensor.setPulseAmplitudeRed(0xFF);
+  // particleSensor.setPulseAmplitudeGreen(0xFF);
+
+  Serial.println("Preloading sensor data into buffer");
+
+  //read the first 100 samples, and determine the signal range
+  for (byte i = 0; i < bufferLength; i++) {
+    while (particleSensor.available() == false)  //do we have new data?
+      particleSensor.check();                    //Check the sensor for new data
+
+    redBuffer[i] = particleSensor.getRed();
+    irBuffer[i] = particleSensor.getIR();
+    particleSensor.nextSample();  //We're finished with this sample so move to next sample
+
+    Serial.print(F("red="));
+    Serial.print(redBuffer[i], DEC);
+    Serial.print(F(", ir="));
+    Serial.println(irBuffer[i], DEC);
+  }
 
   server.begin();
   Serial.println("HTTP server started");
 }
 
-void processClient(WiFiClient &client) {
-  String request = client.readStringUntil('\r');
-  client.read(); // skip '\n'
-  if (request.startsWith("GET")) {
-    int firstSpace = request.indexOf(' ');
-    int secondSpace = request.indexOf(' ', firstSpace + 1);
-    String path = request.substring(firstSpace + 1, secondSpace);
-    if (path == "/led/on") {
-      ledOn = true;
-      sendResponse(client, "LED ON");
-    } else if (path == "/led/off") {
-      ledOn = false;
-      sendResponse(client, "LED OFF");
-    } else if (path == "/buzzer/on") {
-      buzzerOn = true;
-      sendResponse(client, "Buzzer ON");
-    } else if (path == "/buzzer/off") {
-      buzzerOn = false;
-      sendResponse(client, "Buzzer OFF");
-    } else {
-      sendResponse(client, "Not Found");
-    }
-  } else {
-    sendResponse(client, "Unsupported");
-  }
-}
+
+unsigned long lastBloodRead = 0;
 
 void loop() {
   if (server.hasClient()) {
@@ -208,6 +411,29 @@ void loop() {
       processClient(client);
       client.stop();
     }
+  }
+
+  if (millis() - lastBloodRead > 100)
+  {
+    lastBloodRead = millis();
+    // readHRSpO2();
+    // readTemperature();
+    Serial.print("SpO2: ");
+    Serial.print(spo2);
+    Serial.print(", valid: ");
+    Serial.println(validSPO2);
+    Serial.print("Heart Rate: ");
+    Serial.print(heartRate);
+    Serial.print(", valid: ");
+    Serial.println(validHeartRate);
+
+    Serial.print("temperatureC=");
+    Serial.print(temperatureC, 4);
+    Serial.print(" temperatureF=");
+    Serial.println(temperatureF, 4);
+
+    Serial.print("Pressure=");
+    Serial.println(analogRead(pressurePin));
   }
 
   // Handle button press: trigger alert and manage buzzer/LED
@@ -251,59 +477,4 @@ void loop() {
   } else {
     digitalWrite(buzzerPin, LOW);
   }
-}
-
-void sendSensorData() {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Not connected to WiFi. Cannot send sensor data.");
-    return;
-  }
-  int pressureRaw = analogRead(pressurePin);
-  StaticJsonDocument<256> doc;
-  doc["sensor_id"] = sensor_id;
-  doc["pressure"] = pressureRaw;
-  String json;
-  serializeJson(doc, json);
-  HTTPClient http;
-  String url = backendHost + "/api/v1/sensors/data";
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  int httpCode = http.POST(json);
-  if (httpCode > 0) {
-    String payload = http.getString();
-    Serial.println("Sensor data sent. Response:");
-    Serial.println(payload);
-  } else {
-    Serial.print("Failed to send sensor data. Error: ");
-    Serial.println(http.errorToString(httpCode).c_str());
-  }
-  http.end();
-}
-
-void sendAlert() {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Not connected to WiFi. Cannot send alert.");
-    return;
-  }
-  StaticJsonDocument<256> doc;
-  doc["sensor_id"] = sensor_id;
-  doc["alert_type"] = "button_pressed";
-  // doc["timestamp"] = String(millis()); // millis() is time since ESP32 startup
-  doc["timestamp"] = getTimestamp();
-  String json;
-  serializeJson(doc, json);
-  HTTPClient http;
-  String url = backendHost + "/api/v1/sensors/alert";
-  http.begin(url);
-  http.addHeader("Content-Type", "application/json");
-  int httpCode = http.POST(json);
-  if (httpCode > 0) {
-    String payload = http.getString();
-    Serial.println("Alert sent. Response:");
-    Serial.println(payload);
-  } else {
-    Serial.print("Failed to send alert. Error: ");
-    Serial.println(http.errorToString(httpCode).c_str());
-  }
-  http.end();
 }
