@@ -26,36 +26,8 @@ const ingestSensorData = async (req, res) => {
       });
     }
 
-    // Validate sensor data ranges
-    if (heart_rate !== undefined && (heart_rate < 0 || heart_rate > 300)) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: 'INVALID_SENSOR_DATA',
-          message: 'Heart rate must be between 0 and 300 bpm'
-        }
-      });
-    }
-
-    if (oxygen_level !== undefined && (oxygen_level < 0 || oxygen_level > 100)) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: 'INVALID_SENSOR_DATA',
-          message: 'Oxygen level must be between 0 and 100%'
-        }
-      });
-    }
-
-    if (temperature !== undefined && (temperature < 30 || temperature > 45)) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          code: 'INVALID_SENSOR_DATA',
-          message: 'Temperature must be between 30 and 45°C'
-        }
-      });
-    }
+    // No range validation on incoming data - accept all sensor readings
+    // Alert logic will handle threshold comparisons for display purposes
 
     // Check if sensor exists and get patient info
     const [sensors] = await db.query(
