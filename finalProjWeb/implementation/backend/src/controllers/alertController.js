@@ -94,7 +94,8 @@ const getAlerts = async (req, res) => {
           acknowledged: Boolean(alert.acknowledged),
           acknowledged_by: alert.acknowledged_by,
           acknowledged_at: alert.acknowledged_at,
-          timestamp: alert.timestamp
+          timestamp: alert.timestamp,
+          triggered_at: alert.timestamp  // Include both for compatibility
         })),
         pagination: {
           page: parseInt(page),

@@ -129,6 +129,25 @@ const PatientHistoryModal: React.FC<PatientHistoryModalProps> = ({ show, onHide,
       return hasAlert ? reading[metric] : null;
     });
 
+    // Find button press alerts
+    const buttonPressAlerts = alerts.filter(alert => alert.alert_type === 'button_pressed');
+    
+    // Create button press markers
+    const buttonPressPoints = readings.map((reading) => {
+      const readingTime = new Date(reading.timestamp).getTime();
+      const hasButtonPress = buttonPressAlerts.some(alert => {
+        const alertTime = new Date(alert.triggered_at).getTime();
+        // Match if button pressed within 30 seconds of reading
+        return Math.abs(alertTime - readingTime) < 30000;
+      });
+      return hasButtonPress ? reading[metric] : null;
+    });
+
+    // Create pressure off markers (when pressure = 0)
+    const pressureOffPoints = readings.map((reading) => {
+      return reading.pressure === 0 ? reading[metric] : null;
+    });
+
     return {
       labels,
       datasets: [
@@ -147,12 +166,30 @@ const PatientHistoryModal: React.FC<PatientHistoryModalProps> = ({ show, onHide,
           pointRadius: 2,
         },
         {
-          label: 'Alert Events',
+          label: 'Vital Sign Alerts',
           data: alertPoints,
           borderColor: 'rgb(220, 53, 69)',
           backgroundColor: 'rgba(220, 53, 69, 0.8)',
           pointRadius: 8,
           pointStyle: 'triangle',
+          showLine: false,
+        },
+        {
+          label: 'Call Button Pressed',
+          data: buttonPressPoints,
+          borderColor: 'rgb(13, 110, 253)',
+          backgroundColor: 'rgba(13, 110, 253, 0.8)',
+          pointRadius: 8,
+          pointStyle: 'circle',
+          showLine: false,
+        },
+        {
+          label: 'Pressure Off',
+          data: pressureOffPoints,
+          borderColor: 'rgb(220, 53, 69)',
+          backgroundColor: 'rgba(220, 53, 69, 0.8)',
+          pointRadius: 8,
+          pointStyle: 'rect',
           showLine: false,
         },
       ],
