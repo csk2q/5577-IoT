@@ -29,9 +29,10 @@ Usage: node cli.js <command> [options]
 
 Commands:
 
-  start --sensor-id <id> [--interval <ms>] [--behavior <mode>]
+  start --sensor-id <id> [--interval <ms>] [--behavior <mode>] [--button-press-interval <ms>]
     Start a single sensor
     Example: node cli.js start --sensor-id ESP32-VS-001 --interval 5000 --behavior normal
+    Example: node cli.js start --sensor-id ESP32-VS-001 --button-press-interval 30000
 
   start-fleet --count <n> [--prefix <prefix>] [--interval <ms>]
     Start multiple sensors
@@ -109,6 +110,7 @@ function startSensor(options) {
   const sensorId = options['sensor-id'];
   const interval = parseInt(options.interval) || 5000;
   const behavior = options.behavior || 'normal';
+  const buttonPressInterval = options['button-press-interval'] ? parseInt(options['button-press-interval']) : 0;
 
   if (!sensorId) {
     console.error('Error: --sensor-id is required');
@@ -124,6 +126,7 @@ function startSensor(options) {
     sensor_id: sensorId,
     interval,
     behavior,
+    buttonPressInterval,
     apiBaseUrl: API_BASE_URL
   });
 

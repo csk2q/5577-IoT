@@ -17,6 +17,7 @@ interface PatientCardProps {
     temperature: number[];
   };
   hasActiveAlert?: boolean;
+  buttonPressAlertId?: number;
   onClick?: () => void;
   onAcknowledgeAlert?: (patientId: string) => void;
   onConfigureThresholds?: (patient: Patient) => void;
@@ -34,6 +35,7 @@ const PatientCard: React.FC<PatientCardProps> = ({
   latestReading,
   history,
   hasActiveAlert = false,
+  buttonPressAlertId,
   onClick,
   onAcknowledgeAlert,
   onConfigureThresholds
@@ -144,6 +146,25 @@ const PatientCard: React.FC<PatientCardProps> = ({
       }}
     >
       <div className="card-body">
+        {/* Button Press Alert Indicator */}
+        {buttonPressAlertId && (
+          <div className="button-press-alert mb-3">
+            <div className="d-flex align-items-center justify-content-between">
+              <div className="d-flex align-items-center">
+                <i className="bi bi-telephone-fill me-2"></i>
+                <strong>CALL BUTTON PRESSED</strong>
+              </div>
+              <button
+                className="btn btn-sm btn-light"
+                onClick={handleAcknowledge}
+                title="Acknowledge call"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="d-flex justify-content-between align-items-start mb-3">
           <div>

@@ -24,8 +24,10 @@ class MockSensor {
     
     this.isRunning = false;
     this.intervalId = null;
+    this.buttonIntervalId = null;
     this.readingCount = 0;
     this.startTime = null;
+    this.buttonPressInterval = options.buttonPressInterval || 0; // 0 = disabled
     
     // Initialize baseline values
     this.baselineOxygen = 97;
@@ -55,6 +57,14 @@ class MockSensor {
     this.intervalId = setInterval(() => {
       this.sendReading();
     }, this.interval);
+    
+    // Start button press simulation if enabled
+    if (this.buttonPressInterval > 0) {
+      console.log(`[${this.sensor_id}] Button press simulation enabled (every ${this.buttonPressInterval}ms)`);
+      this.buttonIntervalId = setInterval(() => {
+        this.sendButtonAlert();
+      }, this.buttonPressInterval);
+    }
   }
 
   /**
@@ -69,6 +79,10 @@ class MockSensor {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
+    }
+    if (this.buttonIntervalId) {
+      clearInterval(this.buttonIntervalId);
+      this.buttonIntervalId = null;
     }
     console.log(`[${this.sensor_id}] Stopped after ${this.readingCount} readings`);
   }

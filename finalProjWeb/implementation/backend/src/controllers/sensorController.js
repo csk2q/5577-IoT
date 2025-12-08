@@ -274,6 +274,16 @@ const receiveAlert = async (req, res) => {
 
     const alert_id = result.insertId;
 
+    // Broadcast alert to connected SSE clients
+    broadcastAlert({
+      alert_id,
+      patient_id: sensor.patient_identifier,
+      sensor_id,
+      alert_type,
+      severity,
+      message
+    });
+
     logger.warn(`Alert received: ${sensor_id}, type: ${alert_type}, patient: ${sensor.patient_identifier}`);
 
     res.status(201).json({

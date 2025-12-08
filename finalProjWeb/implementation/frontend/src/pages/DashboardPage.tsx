@@ -47,6 +47,9 @@ const DashboardPage = () => {
   
   // Alert IDs for each patient: Map<patient_id, alert_id>
   const [patientAlertIds, setPatientAlertIds] = useState<Map<string, number>>(new Map());
+  
+  // Button press alerts: Map<patient_id, alert_id>
+  const [buttonPressAlerts, setButtonPressAlerts] = useState<Map<string, number>>(new Map());
 
   // Threshold configuration modal state
   const [showThresholdModal, setShowThresholdModal] = useState(false);
@@ -91,36 +94,59 @@ const DashboardPage = () => {
       });
     },
     onAlertTriggered: (event: SSEAlertTriggeredEvent) => {
-      // Add patient to active alerts and track alert ID
-      const { patient_id, alert_id } = event.data;
-      setActiveAlerts((prev) => {
-        const newSet = new Set(prev);
-        newSet.add(patient_id);
-        return newSet;
-      });
-      setPatientAlertIds((prev) => {
-        const newMap = new Map(prev);
-        newMap.set(patient_id, alert_id);
-        return newMap;
-      });
-      console.log('Alert triggered:', event.data.message);
-    },
-    onAlertAcknowledged: (event: SSEAlertAcknowledgedEvent) => {
-      // Remove patient from active alerts when acknowledged
-      // PL-001 fix: backend now includes patient_id in this event
-      const { patient_id } = event.data;
-      if (patient_id) {
+      // Track alert based on type
+      const { patient_id, alert_id, alert_type } = event.data;
+      
+      if (alert_type === 'button_pressed') {
+        // Track button press separately
+        setButtonPressAlerts((prev) => {
+          const newMap = new Map(prev);
+          newMap.set(patient_id, alert_id);
+          return newMap;
+        });
+        console.log('Button press alert:', event.data.message);
+      } else {
+        // Track vitals/other alerts
         setActiveAlerts((prev) => {
           const newSet = new Set(prev);
-          newSet.delete(patient_id);
+          newSet.add(patient_id);
           return newSet;
         });
         setPatientAlertIds((prev) => {
           const newMap = new Map(prev);
-          newMap.delete(patient_id);
+          newMap.set(patient_id, alert_id);
           return newMap;
         });
-        console.log('Alert acknowledged for patient:', patient_id);
+        console.log('Alert triggered:', event.data.message);
+      }
+    },
+    onAlertAcknowledged: (event: SSEAlertAcknowledgedEvent) => {
+      // Remove patient from active alerts when acknowledged
+      // PL-001 fix: backend now includes patient_id in this event
+      const { patient_id, alert_id } = event.data;
+      if (patient_id) {
+        // Check if this was a button press alert
+        if (buttonPressAlerts.get(patient_id) === alert_id) {
+          setButtonPressAlerts((prev) => {
+            const newMap = new Map(prev);
+            newMap.delete(patient_id);
+            return newMap;
+          });
+          console.log('Button press alert acknowledged for patient:', patient_id);
+        } else {
+          // Regular vitals alert
+          setActiveAlerts((prev) => {
+            const newSet = new Set(prev);
+            newSet.delete(patient_id);
+            return newSet;
+          });
+          setPatientAlertIds((prev) => {
+            const newMap = new Map(prev);
+            newMap.delete(patient_id);
+            return newMap;
+          });
+          console.log('Alert acknowledged for patient:', patient_id);
+        }
       }
     },
     onConnected: () => {
@@ -373,6 +399,7 @@ const DashboardPage = () => {
             {patients.map((patient) => {
               const sensorHistory = patient.sensor_id ? sensorData.get(patient.sensor_id) : undefined;
               const hasAlert = activeAlerts.has(patient.patient_id);
+              const buttonPressAlertId = buttonPressAlerts.get(patient.patient_id);
               
               return (
                 <Col key={patient.patient_id} xs={12} sm={6} lg={4} xl={3}>
@@ -382,6 +409,7 @@ const DashboardPage = () => {
                       latestReading={sensorHistory?.latest}
                       history={sensorHistory?.history}
                       hasActiveAlert={hasAlert}
+                      buttonPressAlertId={buttonPressAlertId}
                       onClick={() => console.log('Patient clicked:', patient.patient_id)}
                       onAcknowledgeAlert={handleAcknowledgeAlert}
                       onConfigureThresholds={handleConfigureThresholds}

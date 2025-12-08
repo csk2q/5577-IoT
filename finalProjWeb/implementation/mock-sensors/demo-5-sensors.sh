@@ -45,7 +45,7 @@ SENSOR_2_NAME="Linda Jackson (Pressure Cycling - 10s on / 5s off)"
 # Warning Patients (2)
 SENSOR_3_ID="ESP32-VS-002"  # Mary Thompson - Room 101B
 SENSOR_3_BEHAVIOR="warning"
-SENSOR_3_NAME="Mary Thompson (Warning)"
+SENSOR_3_NAME="Mary Thompson (Warning + Button every 30s)"
 
 SENSOR_4_ID="ESP32-VS-007"  # William White - Room 104A
 SENSOR_4_BEHAVIOR="elevated-hr"  # Elevated heart rate
@@ -72,6 +72,7 @@ start_sensor() {
     local sensor_id="$1"
     local behavior="$2"
     local name="$3"
+    local button_interval="$4"
     local pid_file="$PID_DIR/${sensor_id}.pid"
 
     # Check if already running
@@ -85,13 +86,19 @@ start_sensor() {
 
     # Start sensor in background
     echo -e "${GREEN}▶${NC}  Starting: $name"
-    echo -e "   Sensor: $sensor_id | Behavior: $behavior | Interval: ${INTERVAL}ms"
+    if [ -n "$button_interval" ]; then
+        echo -e "   Sensor: $sensor_id | Behavior: $behavior | Interval: ${INTERVAL}ms | Button: ${button_interval}ms"
+    else
+        echo -e "   Sensor: $sensor_id | Behavior: $behavior | Interval: ${INTERVAL}ms"
+    fi
     
-    nohup node "$CLI_PATH" start \
-        --sensor-id "$sensor_id" \
-        --behavior "$behavior" \
-        --interval "$INTERVAL" \
-        > "$PID_DIR/${sensor_id}.log" 2>&1 &
+    local cmd="nohup node \"$CLI_PATH\" start --sensor-id \"$sensor_id\" --behavior \"$behavior\" --interval \"$INTERVAL\""
+    if [ -n "$button_interval" ]; then
+        cmd="$cmd --button-press-interval \"$button_interval\""
+    fi
+    cmd="$cmd > \"$PID_DIR/${sensor_id}.log\" 2>&1 &"
+    
+    eval $cmd
     
     local pid=$!
     echo "$pid" > "$pid_file"
@@ -157,15 +164,15 @@ start_all() {
     echo ""
     
     echo -e "${BLUE}Normal Patients (2):${NC}"
-    start_sensor "$SENSOR_1_ID" "$SENSOR_1_BEHAVIOR" "$SENSOR_1_NAME"
-    start_sensor "$SENSOR_2_ID" "$SENSOR_2_BEHAVIOR" "$SENSOR_2_NAME"
+    start_sensor "$SENSOR_1_ID" "$SENSOR_1_BEHAVIOR" "$SENSOR_1_NAME" ""
+    start_sensor "$SENSOR_2_ID" "$SENSOR_2_BEHAVIOR" "$SENSOR_2_NAME" ""
     
     echo -e "${BLUE}Warning Patients (2):${NC}"
-    start_sensor "$SENSOR_3_ID" "$SENSOR_3_BEHAVIOR" "$SENSOR_3_NAME"
-    start_sensor "$SENSOR_4_ID" "$SENSOR_4_BEHAVIOR" "$SENSOR_4_NAME"
+    start_sensor "$SENSOR_3_ID" "$SENSOR_3_BEHAVIOR" "$SENSOR_3_NAME" "30000"
+    start_sensor "$SENSOR_4_ID" "$SENSOR_4_BEHAVIOR" "$SENSOR_4_NAME" ""
     
     echo -e "${BLUE}Critical Patient (1):${NC}"
-    start_sensor "$SENSOR_5_ID" "$SENSOR_5_BEHAVIOR" "$SENSOR_5_NAME"
+    start_sensor "$SENSOR_5_ID" "$SENSOR_5_BEHAVIOR" "$SENSOR_5_NAME" ""
     
     echo -e "${GREEN}======================================${NC}"
     echo -e "${GREEN}All sensors started!${NC}"
