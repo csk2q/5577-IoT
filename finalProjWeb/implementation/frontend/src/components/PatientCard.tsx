@@ -8,6 +8,7 @@ interface PatientCardProps {
     oxygen_level: number;
     heart_rate: number;
     temperature: number;
+    pressure?: number;
     timestamp: string;
   };
   history?: {
@@ -130,9 +131,12 @@ const PatientCard: React.FC<PatientCardProps> = ({
     return '';
   };
 
+  // Check for pressure off condition
+  const isPressureOff = latestReading?.pressure === 0;
+
   return (
     <div
-      className={`card h-100 ${hasActiveAlert ? 'border-danger border-3 shadow-lg' : 'border-secondary'} ${onClick ? 'cursor-pointer' : ''}`}
+      className={`card h-100 ${hasActiveAlert ? 'border-danger border-3 shadow-lg' : 'border-secondary'} ${onClick ? 'cursor-pointer' : ''} ${isPressureOff ? 'pressure-off' : ''}`}
       onClick={onClick}
       style={{
         cursor: onClick ? 'pointer' : 'default',

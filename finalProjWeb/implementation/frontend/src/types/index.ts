@@ -65,6 +65,7 @@ export interface SensorReading {
   oxygen_level: number | null;
   heart_rate: number;
   temperature: number | null;
+  pressure?: number;
   timestamp: string;
 }
 

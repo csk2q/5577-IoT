@@ -15,6 +15,7 @@ interface SensorReading {
   oxygen_level: number;
   heart_rate: number;
   temperature: number;
+  pressure?: number;
   timestamp: string;
 }
 
@@ -66,6 +67,7 @@ const DashboardPage = () => {
           oxygen_level: event.data.oxygen_level || 0,
           heart_rate: event.data.heart_rate || 0,
           temperature: event.data.temperature || 0,
+          pressure: event.data.pressure,
           timestamp: event.data.timestamp,
         };
         

@@ -13,7 +13,7 @@ const { broadcastSensorReading, broadcastAlert } = require('../routes/sseRoutes'
  */
 const ingestSensorData = async (req, res) => {
   try {
-    const { sensor_id, oxygen_level, heart_rate, temperature, timestamp } = req.body;
+    const { sensor_id, oxygen_level, heart_rate, temperature, pressure, timestamp } = req.body;
 
     // Validate required fields
     if (!sensor_id) {
@@ -53,14 +53,15 @@ const ingestSensorData = async (req, res) => {
     // Insert sensor reading
     const readingTimestamp = timestamp ? new Date(timestamp) : new Date();
     const [result] = await db.query(
-      `INSERT INTO sensor_readings (sensor_id, patient_id, heart_rate, blood_oxygen_level, temperature, timestamp)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO sensor_readings (sensor_id, patient_id, heart_rate, blood_oxygen_level, temperature, pressure_status, timestamp)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         sensor.sensor_id,
         sensor.patient_id,
         heart_rate || null,
         oxygen_level || null,
         temperature || null,
+        pressure !== undefined ? pressure : null,
         readingTimestamp
       ]
     );
@@ -89,6 +90,7 @@ const ingestSensorData = async (req, res) => {
       heart_rate,
       oxygen_level,
       temperature,
+      pressure,
       timestamp: readingTimestamp
     });
 

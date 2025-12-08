@@ -84,13 +84,15 @@ CREATE TABLE IF NOT EXISTS sensor_readings (
     heart_rate INT NULL,
     blood_oxygen_level DECIMAL(5,2) NULL,
     temperature DECIMAL(4,1) NULL,
+    pressure_status TINYINT(1) NULL COMMENT 'Pressure sensor: 1=on (normal), 0=off (alert)',
     reading_quality ENUM('good', 'fair', 'poor') NOT NULL DEFAULT 'good',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (sensor_id) REFERENCES sensors(sensor_id) ON DELETE CASCADE,
     FOREIGN KEY (patient_id) REFERENCES patients(patient_id) ON DELETE CASCADE,
     INDEX idx_sensor_timestamp (sensor_id, timestamp DESC),
     INDEX idx_patient_timestamp (patient_id, timestamp DESC),
-    INDEX idx_timestamp (timestamp DESC)
+    INDEX idx_timestamp (timestamp DESC),
+    INDEX idx_pressure_status (pressure_status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================================

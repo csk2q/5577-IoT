@@ -17,6 +17,7 @@ export interface SSESensorReadingEvent {
     heart_rate?: number;
     oxygen_level?: number;
     temperature?: number;
+    pressure?: number;
     timestamp: string;
   };
   timestamp: string;
