@@ -39,8 +39,8 @@ SENSOR_1_BEHAVIOR="normal"
 SENSOR_1_NAME="Robert Anderson (Normal)"
 
 SENSOR_2_ID="ESP32-VS-006"  # Linda Jackson - Room 103B
-SENSOR_2_BEHAVIOR="normal"
-SENSOR_2_NAME="Linda Jackson (Normal)"
+SENSOR_2_BEHAVIOR="pressure-cycling"
+SENSOR_2_NAME="Linda Jackson (Pressure Cycling - 10s on / 5s off)"
 
 # Warning Patients (2)
 SENSOR_3_ID="ESP32-VS-002"  # Mary Thompson - Room 101B

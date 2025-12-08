@@ -25,6 +25,7 @@ class MockSensor {
     this.isRunning = false;
     this.intervalId = null;
     this.readingCount = 0;
+    this.startTime = null;
     
     // Initialize baseline values
     this.baselineOxygen = 97;
@@ -44,6 +45,7 @@ class MockSensor {
     }
 
     this.isRunning = true;
+    this.startTime = Date.now();
     console.log(`[${this.sensor_id}] Starting... sending data every ${this.interval}ms`);
     
     // Send first reading immediately
@@ -85,7 +87,7 @@ class MockSensor {
    * @returns {Object} Sensor reading data
    */
   generateReading() {
-    let oxygen, heartRate, temperature;
+    let oxygen, heartRate, temperature, pressure;
 
     switch (this.behavior) {
       case 'normal':
@@ -93,6 +95,7 @@ class MockSensor {
         oxygen = this.randomInRange(95, 100);
         heartRate = this.randomInRange(60, 100);
         temperature = this.randomInRange(36.1, 37.8);
+        pressure = 1; // Normal pressure always on
         break;
 
       case 'warning':
@@ -104,6 +107,7 @@ class MockSensor {
         temperature = Math.random() < 0.5
           ? this.randomInRange(35.5, 36.0)  // Low temp
           : this.randomInRange(37.9, 38.5); // High temp
+        pressure = 1; // Normal pressure
         break;
 
       case 'critical':
@@ -115,6 +119,7 @@ class MockSensor {
         temperature = Math.random() < 0.5
           ? this.randomInRange(34.0, 35.4)  // Hypothermia
           : this.randomInRange(38.6, 40.0); // Fever
+        pressure = 1; // Normal pressure
         break;
 
       case 'deteriorating':
@@ -123,6 +128,7 @@ class MockSensor {
         oxygen = this.randomInRange(100 - (progress * 10), 100 - (progress * 5));
         heartRate = this.randomInRange(75 + (progress * 30), 85 + (progress * 30));
         temperature = this.randomInRange(36.8 + (progress * 2), 37.2 + (progress * 2));
+        pressure = 1; // Normal pressure
         break;
 
       case 'erratic':
@@ -130,6 +136,7 @@ class MockSensor {
         oxygen = this.randomInRange(80, 100);
         heartRate = this.randomInRange(40, 140);
         temperature = this.randomInRange(35, 40);
+        pressure = 1; // Normal pressure
         break;
 
       case 'stable-low':
@@ -137,6 +144,7 @@ class MockSensor {
         oxygen = this.randomInRange(92, 94);
         heartRate = this.randomInRange(55, 60);
         temperature = this.randomInRange(36.0, 36.5);
+        pressure = 1; // Normal pressure
         break;
 
       case 'stable-high':
@@ -144,6 +152,19 @@ class MockSensor {
         oxygen = this.randomInRange(96, 98);
         heartRate = this.randomInRange(95, 105);
         temperature = this.randomInRange(37.5, 38.0);
+        pressure = 1; // Normal pressure
+        break;
+
+      case 'pressure-cycling':
+        // Normal vitals but pressure cycles: 10 seconds on, 5 seconds off
+        oxygen = this.randomInRange(95, 100);
+        heartRate = this.randomInRange(60, 100);
+        temperature = this.randomInRange(36.1, 37.8);
+        
+        // Calculate elapsed time in seconds
+        const elapsedSeconds = Math.floor((Date.now() - this.startTime) / 1000);
+        const cyclePosition = elapsedSeconds % 15; // 15 second cycle (10 on + 5 off)
+        pressure = cyclePosition < 10 ? 1 : 0; // On for first 10s, off for last 5s
         break;
 
       default:
@@ -151,6 +172,7 @@ class MockSensor {
         oxygen = this.randomInRange(95, 100);
         heartRate = this.randomInRange(60, 100);
         temperature = this.randomInRange(36.1, 37.8);
+        pressure = 1; // Normal pressure
     }
 
     return {
@@ -158,6 +180,7 @@ class MockSensor {
       oxygen_level: parseFloat(oxygen.toFixed(1)),
       heart_rate: Math.round(heartRate),
       temperature: parseFloat(temperature.toFixed(1)),
+      pressure: pressure,
       timestamp: new Date().toISOString()
     };
   }
@@ -188,9 +211,10 @@ class MockSensor {
       this.readingCount++;
       
       if (response.data.success) {
+        const pressureIndicator = reading.pressure === 0 ? ' ⚠️ PRESSURE OFF' : '';
         console.log(
           `[${this.sensor_id}] ✓ Reading ${this.readingCount}: ` +
-          `O2=${reading.oxygen_level}% HR=${reading.heart_rate}bpm T=${reading.temperature}°C`
+          `O2=${reading.oxygen_level}% HR=${reading.heart_rate}bpm T=${reading.temperature}°C P=${reading.pressure}${pressureIndicator}`
         );
       }
     } catch (error) {
